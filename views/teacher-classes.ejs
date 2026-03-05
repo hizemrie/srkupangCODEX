@@ -1,0 +1,25 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Class</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <%- include('partials/teacher-nav') %>
+  <main class="container">
+    <h2>Select Class for <%= mode === "reward" ? "Reward System" : "Student Details" %></h2>
+    <div class="cards-3">
+      <% classes.forEach(cls => { %>
+        <% if (mode === "reward") { %>
+          <a class="card action-card" href="/teacher/reward/<%= cls.id %>"><%= cls.name %></a>
+        <% } else { %>
+          <a class="card action-card" href="/teacher/students/class/<%= cls.id %>"><%= cls.name %></a>
+        <% } %>
+      <% }) %>
+    </div>
+  </main>
+  <script src="/js/inactivity.js"></script>
+</body>
+</html>

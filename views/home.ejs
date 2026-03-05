@@ -1,0 +1,40 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SRKupang</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>Sekolah Rendah OKAWSD Kupang, Tutong</h1>
+    <div>
+      <a class="btn subtle" href="/login/admin">Admin</a>
+    </div>
+  </header>
+  <main class="landing-grid">
+    <section class="left-panel">
+      <a class="btn large" href="/login/teacher">Teacher Login</a>
+      <a class="btn large secondary" href="/leaderboard">Leaderboard</a>
+    </section>
+
+    <section class="right-panel">
+      <h2>Upcoming Events (Today + 7 days)</h2>
+      <% if (!events.length) { %>
+        <p>No upcoming events.</p>
+      <% } %>
+      <ul class="event-list">
+        <% events.forEach(event => { %>
+          <li>
+            <strong><%= event.event_date %></strong> - <%= event.title %>
+            <% if (event.details) { %>
+              <div class="muted"><%= event.details %></div>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

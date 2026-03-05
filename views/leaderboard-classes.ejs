@@ -1,0 +1,23 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leaderboard Classes</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="leaderboard-bg">
+  <header class="site-header leaderboard-header">
+    <h1>Leaderboard</h1>
+    <a class="btn secondary" href="/">Back to Home</a>
+  </header>
+  <main class="container leaderboard-class-shell">
+    <p class="muted">Choose class to display live ranking.</p>
+    <div class="leaderboard-class-grid">
+      <% classes.forEach(cls => { %>
+        <a class="leaderboard-class-card" href="/leaderboard/<%= cls.id %>"><%= cls.name %></a>
+      <% }) %>
+    </div>
+  </main>
+</body>
+</html>

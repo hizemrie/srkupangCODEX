@@ -1,0 +1,142 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <%- include('partials/admin-nav') %>
+
+  <main class="container stack">
+    <% if (error) { %>
+      <section class="card"><div class="error"><%= error %></div></section>
+    <% } %>
+    <% if (success) { %>
+      <section class="card"><div><%= success %></div></section>
+    <% } %>
+
+    <section class="card">
+      <h2>Backup and Restore</h2>
+      <div class="stack">
+        <div class="inline-filters">
+          <a class="btn" href="/admin/backup/download">Download Full Backup</a>
+        </div>
+
+        <form class="inline-filters" method="post" action="/admin/backup/save-path">
+          <input type="text" name="destination_path" placeholder="Destination folder path (example: D:\\school-backups)" required style="min-width: 320px;" />
+          <button class="btn" type="submit">Save Backup to Folder</button>
+        </form>
+
+        <form class="inline-filters" method="post" action="/admin/backup/restore" enctype="multipart/form-data">
+          <input type="file" name="backup_file" accept=".json,application/json" required />
+          <button class="btn danger" type="submit" onclick="return confirm('Restore will replace all current data. Continue?');">Restore from Backup File</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Deleted Events (Teacher Deleted)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Start</th>
+            <th>End</th>
+            <th>Title</th>
+            <th>Deleted By</th>
+            <th>Deleted At</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!deletedEvents.length) { %>
+            <tr><td colspan="6" class="muted">No deleted events.</td></tr>
+          <% } %>
+          <% deletedEvents.forEach(ev => { %>
+            <tr>
+              <td><%= ev.event_date %></td>
+              <td><%= ev.end_date %></td>
+              <td><%= ev.title %></td>
+              <td><%= ev.deleted_by_name || 'Unknown' %></td>
+              <td><%= ev.deleted_at || '-' %></td>
+              <td>
+                <form method="post" action="/admin/events/purge/<%= ev.id %>" onsubmit="return confirm('Permanently delete this event record?');">
+                  <button class="btn danger" type="submit">Delete Permanently</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Teachers</h2>
+      <form class="form inline-filters" method="post" action="/admin/teachers/add">
+        <input type="text" name="username" placeholder="Username" required />
+        <input type="text" name="display_name" placeholder="Display name" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <button class="btn" type="submit">Add Teacher</button>
+      </form>
+
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Username</th><th>Name</th><th>Created</th><th>Reset Password</th></tr>
+        </thead>
+        <tbody>
+          <% teachers.forEach(t => { %>
+            <tr>
+              <td><%= t.id %></td>
+              <td><%= t.username %></td>
+              <td><%= t.display_name %></td>
+              <td><%= t.created_at %></td>
+              <td>
+                <form class="inline-filters" method="post" action="/admin/teachers/reset-password">
+                  <input type="hidden" name="teacher_id" value="<%= t.id %>" />
+                  <input type="password" name="new_password" placeholder="New password" required />
+                  <button class="btn" type="submit">Reset</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Add Student Manually</h2>
+      <form class="form grid-form" method="post" action="/admin/students/add">
+        <label>Class
+          <select name="class_id" required>
+            <% classes.forEach(c => { %>
+              <option value="<%= c.id %>"><%= c.name %></option>
+            <% }) %>
+          </select>
+        </label>
+        <label>Student ID<input type="text" name="student_id" required /></label>
+        <label>No.SB<input type="text" name="no_sb" required /></label>
+        <label>Full Name<input type="text" name="full_name" required /></label>
+        <label>Nickname<input type="text" name="nickname" required /></label>
+        <label>DOB<input type="date" name="dob" required /></label>
+        <label>Photo URL<input type="url" name="photo_url" /></label>
+        <label>Emergency Contact<input type="text" name="emergency_contact" required /></label>
+        <label>Siblings by Student ID (semicolon separated)
+          <input type="text" name="siblings_student_ids" placeholder="STU0002;STU0003" />
+        </label>
+        <button class="btn" type="submit">Add Student</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Import Students by CSV</h2>
+      <p class="muted">Required CSV columns: class_name,No.SB,student_id,full_name,nickname,dob,photo_url,emergency_contact,siblings_student_ids</p>
+      <form method="post" action="/admin/students/import" enctype="multipart/form-data" class="inline-filters">
+        <input type="file" name="students_csv" accept=".csv" required />
+        <button class="btn" type="submit">Import CSV</button>
+      </form>
+    </section>
+  </main>
+  <script src="/js/inactivity.js"></script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <%- include('partials/teacher-nav') %>
+  <main class="container">
+    <div class="calendar-header-row">
+      <h2>School Calendar</h2>
+      <div class="button-row">
+        <a class="btn secondary" href="/teacher/calendar?month=<%= prevMonth %>">Previous</a>
+        <div class="calendar-month-label"><%= monthLabel %></div>
+        <a class="btn secondary" href="/teacher/calendar?month=<%= nextMonth %>">Next</a>
+      </div>
+    </div>
+
+    <section class="calendar-board">
+      <div class="calendar-grid-header">
+        <div>Monday</div>
+        <div>Tuesday</div>
+        <div>Wednesday</div>
+        <div>Thursday</div>
+        <div>Friday</div>
+        <div>Saturday</div>
+        <div>Sunday</div>
+      </div>
+
+      <% weeks.forEach(week => { %>
+        <div class="calendar-week-block">
+          <div class="calendar-week-row">
+            <% week.days.forEach(day => { %>
+              <div class="calendar-day <%= day.isCurrentMonth ? '' : 'out-month' %> <%= day.isToday ? 'today' : '' %>">
+                <div class="day-num"><%= day.dayOfMonth %></div>
+              </div>
+            <% }) %>
+          </div>
+
+          <div class="calendar-spans" style="--lanes:<%= week.laneCount %>">
+            <% week.spans.forEach(span => { %>
+              <div
+                class="event-span <%= span.continuesLeft ? 'cont-left' : '' %> <%= span.continuesRight ? 'cont-right' : '' %>"
+                style="grid-column: <%= span.startCol %> / <%= span.endCol %>; grid-row: <%= span.lane + 1 %>; background: <%= span.color %>;"
+                title="<%= span.title %><%= span.details ? ' - ' + span.details : '' %>">
+                <span><%= span.title %></span>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      <% }) %>
+    </section>
+
+    <form class="card form calendar-add-form" method="post" action="/teacher/calendar/add">
+      <h3>Add Event</h3>
+      <div class="inline-filters">
+        <label>Title
+          <input type="text" name="title" required />
+        </label>
+        <label>Details
+          <input type="text" name="details" />
+        </label>
+        <label>Start Date
+          <input type="date" name="event_date" required />
+        </label>
+        <label>End Date
+          <input type="date" name="end_date" />
+        </label>
+        <button class="btn" type="submit">Add Event</button>
+      </div>
+    </form>
+
+    <h3>Active Events</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Start</th>
+          <th>End</th>
+          <th>Title</th>
+          <th>Details</th>
+          <th>Created By</th>
+          <th>Created At</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% allEvents.forEach(ev => { %>
+          <tr>
+            <td><%= ev.event_date %></td>
+            <td><%= ev.end_date %></td>
+            <td><%= ev.title %></td>
+            <td><%= ev.details %></td>
+            <td><%= ev.creator_name %></td>
+            <td><%= ev.created_at %></td>
+            <td>
+              <form method="post" action="/teacher/calendar/delete/<%= ev.id %>">
+                <button type="submit" class="btn danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <h3>Deletion Log</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Start</th>
+          <th>End</th>
+          <th>Title</th>
+          <th>Deleted By</th>
+          <th>Deleted At</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!deletedLogs.length) { %>
+          <tr><td colspan="5" class="muted">No deleted events.</td></tr>
+        <% } %>
+        <% deletedLogs.forEach(ev => { %>
+          <tr>
+            <td><%= ev.event_date %></td>
+            <td><%= ev.end_date %></td>
+            <td><%= ev.title %></td>
+            <td><%= ev.deleted_by_name || 'Unknown' %></td>
+            <td><%= ev.deleted_at || '-' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </main>
+  <script src="/js/inactivity.js"></script>
+</body>
+</html>

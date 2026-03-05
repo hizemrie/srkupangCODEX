@@ -1,0 +1,45 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= cls.name %> Leaderboard</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="leaderboard-bg">
+  <main class="leaderboard-screen">
+    <header class="leaderboard-top">
+      <div>
+        <h1>Leaderboard</h1>
+        <div class="leaderboard-sub"><%= cls.name %></div>
+      </div>
+      <div class="button-row">
+        <a class="btn secondary" href="/leaderboard">Classes</a>
+        <a class="btn secondary" href="/">Home</a>
+      </div>
+    </header>
+
+    <section id="leaderboardTable" data-class-id="<%= cls.id %>" class="leaderboard-list-shell">
+      <div id="leaderboardRows" class="leaderboard-list">
+        <% let prevPts = null; let prevRank = 0; %>
+        <% rows.forEach((r, i) => { %>
+          <% const pts = Number(r.total_points || 0); %>
+          <% const rank = (prevPts !== null && pts === prevPts) ? prevRank : (i + 1); %>
+          <% prevPts = pts; prevRank = rank; %>
+          <article class="leaderboard-row rank-<%= rank <= 3 ? rank : 0 %>">
+            <div class="avatar-dot"><%= (r.nickname || '?').charAt(0).toUpperCase() %></div>
+            <div class="name-block">
+              <div class="name-text"><%= r.nickname %></div>
+              <div class="points-text"><%= pts.toLocaleString() %> points</div>
+            </div>
+            <div class="rank-badge"><%= rank %></div>
+          </article>
+        <% }) %>
+      </div>
+      <div class="leaderboard-meta" id="lastUpdated">Last updated: <%= generatedAt %></div>
+    </section>
+  </main>
+
+  <script src="/js/leaderboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reward - <%= cls.name %></title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <%- include('partials/teacher-nav') %>
+  <main class="container reward-container">
+    <h2>Reward System: <%= cls.name %></h2>
+
+    <div class="reward-grid-compact">
+      <% students.forEach(st => { %>
+        <div class="reward-tile">
+          <div class="reward-tile-head">
+            <div class="reward-name-wrap">
+              <div class="reward-nickname"><%= st.nickname %></div>
+              <div class="reward-fullname"><%= st.full_name %></div>
+            </div>
+            <div class="reward-points">Pts: <strong><%= st.total_points %></strong></div>
+          </div>
+
+          <div class="reward-quick-row reward-quick-3">
+            <button
+              class="btn reward-quick plus award-trigger"
+              type="button"
+              data-student-id="<%= st.id %>"
+              data-class-id="<%= cls.id %>"
+              data-mode="1">+1</button>
+            <button
+              class="btn reward-quick minus award-trigger"
+              type="button"
+              data-student-id="<%= st.id %>"
+              data-class-id="<%= cls.id %>"
+              data-mode="-1">-1</button>
+            <button
+              class="btn reward-quick manual award-trigger"
+              type="button"
+              data-student-id="<%= st.id %>"
+              data-class-id="<%= cls.id %>"
+              data-mode="manual">Manual</button>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </main>
+
+  <div id="awardModal" class="reward-modal hidden" aria-hidden="true">
+    <div class="reward-modal-card">
+      <h3>Award Points</h3>
+      <form id="awardModalForm" method="post" action="/teacher/reward/award" class="form">
+        <input type="hidden" name="student_id" id="modalStudentId" />
+        <input type="hidden" name="class_id" id="modalClassId" />
+        <input type="hidden" name="point_mode" id="modalPointMode" />
+
+        <label id="manualPointsWrap" class="hidden" style="display:none;">Manual Points
+          <input type="number" name="manual_points" id="modalManualPoints" value="0" disabled />
+        </label>
+
+        <label>Reason
+          <select name="reason" id="modalReason">
+            <option value="">Select reason</option>
+            <% reasons.forEach(r => { %>
+              <option value="<%= r.reason %>"><%= r.reason %></option>
+            <% }) %>
+          </select>
+        </label>
+
+        <label>Custom Reason (optional)
+          <input type="text" name="custom_reason" id="modalCustomReason" placeholder="Type new reason to save" />
+        </label>
+
+        <div class="button-row">
+          <button class="btn" type="submit">Confirm</button>
+          <button class="btn secondary" type="button" id="modalCancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var modal = document.getElementById('awardModal');
+      var modalForm = document.getElementById('awardModalForm');
+      var modalStudentId = document.getElementById('modalStudentId');
+      var modalClassId = document.getElementById('modalClassId');
+      var modalPointMode = document.getElementById('modalPointMode');
+      var manualWrap = document.getElementById('manualPointsWrap');
+      var manualPoints = document.getElementById('modalManualPoints');
+      var reason = document.getElementById('modalReason');
+      var customReason = document.getElementById('modalCustomReason');
+      var cancelBtn = document.getElementById('modalCancel');
+
+      function openModal(studentId, classId, mode) {
+        modalStudentId.value = studentId;
+        modalClassId.value = classId;
+        modalPointMode.value = mode;
+
+        reason.value = '';
+        customReason.value = '';
+        manualPoints.value = 0;
+
+        if (mode === 'manual') {
+          manualWrap.classList.remove('hidden');
+          manualWrap.style.display = 'grid';
+          manualPoints.disabled = false;
+        } else {
+          manualWrap.classList.add('hidden');
+          manualWrap.style.display = 'none';
+          manualPoints.disabled = true;
+          manualPoints.value = 0;
+        }
+
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+      }
+
+      document.querySelectorAll('.award-trigger').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openModal(btn.dataset.studentId, btn.dataset.classId, btn.dataset.mode);
+        });
+      });
+
+      cancelBtn.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+      });
+
+      modalForm.addEventListener('submit', function (e) {
+        var chosenReason = (reason.value || '').trim();
+        var custom = (customReason.value || '').trim();
+
+        if (!chosenReason && !custom) {
+          e.preventDefault();
+          alert('Please select a reason or type a custom reason.');
+          return;
+        }
+
+        if (modalPointMode.value === 'manual') {
+          var points = Number(manualPoints.value);
+          if (!Number.isInteger(points)) {
+            e.preventDefault();
+            alert('Manual points must be an integer.');
+          }
+        }
+      });
+    })();
+  </script>
+  <script src="/js/inactivity.js"></script>
+</body>
+</html>

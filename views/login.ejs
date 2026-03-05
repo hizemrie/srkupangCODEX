@@ -1,0 +1,25 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= role === "admin" ? "Admin Login" : "Teacher Login" %></title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="center-page">
+  <form class="card form" method="post" action="/login/<%= role %>">
+    <h2><%= role === "admin" ? "Admin Login" : "Teacher Login" %></h2>
+    <label>Username
+      <input type="text" name="username" required />
+    </label>
+    <label>Password
+      <input type="password" name="password" required />
+    </label>
+    <% if (error) { %>
+      <div class="error"><%= error %></div>
+    <% } %>
+    <button class="btn" type="submit">Sign In</button>
+    <a class="btn secondary" href="/">Back</a>
+  </form>
+</body>
+</html>

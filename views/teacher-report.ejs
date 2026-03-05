@@ -1,0 +1,68 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teacher Reports</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <%- include('partials/teacher-nav') %>
+  <main class="container">
+    <h2>Generate Report</h2>
+
+    <form class="card form inline-filters" method="get" action="/teacher/report">
+      <label>Class
+        <select name="classId" required>
+          <option value="">Select class</option>
+          <% classes.forEach(c => { %>
+            <option value="<%= c.id %>" <%= Number(classId) === c.id ? "selected" : "" %>><%= c.name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>From
+        <input type="date" name="from" value="<%= dateFrom %>" required />
+      </label>
+      <label>To
+        <input type="date" name="to" value="<%= dateTo %>" required />
+      </label>
+      <button class="btn" type="submit">View</button>
+      <% if (rows.length) { %>
+        <a class="btn secondary" href="/teacher/report/export?classId=<%= classId %>&from=<%= dateFrom %>&to=<%= dateTo %>">Export Spreadsheet (CSV)</a>
+      <% } %>
+    </form>
+
+    <% if (rows.length) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Awarded At</th>
+            <th>Student ID</th>
+            <th>No.SB</th>
+            <th>Name</th>
+            <th>Nickname</th>
+            <th>Points</th>
+            <th>Reason</th>
+            <th>Awarded By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(r => { %>
+            <tr>
+              <td><%= r.awarded_at %></td>
+              <td><%= r.student_id %></td>
+              <td><%= r.no_sb %></td>
+              <td><%= r.full_name %></td>
+              <td><%= r.nickname %></td>
+              <td><%= r.points %></td>
+              <td><%= r.reason %></td>
+              <td><%= r.awarded_by %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </main>
+  <script src="/js/inactivity.js"></script>
+</body>
+</html>
