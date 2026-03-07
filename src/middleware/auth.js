@@ -1,9 +1,11 @@
-﻿function requireRole(role) {
+function requireRole(roleOrRoles) {
+  const allowedRoles = Array.isArray(roleOrRoles) ? roleOrRoles : [roleOrRoles];
+
   return (req, res, next) => {
     if (!req.session.user) {
-      return res.redirect(role === "admin" ? "/login/admin" : "/login/teacher");
+      return res.redirect(allowedRoles.includes("admin") ? "/login/admin" : "/login/teacher");
     }
-    if (req.session.user.role !== role) {
+    if (!allowedRoles.includes(req.session.user.role)) {
       return res.status(403).send("Forbidden");
     }
     return next();

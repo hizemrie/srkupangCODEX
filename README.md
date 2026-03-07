@@ -1,4 +1,4 @@
-﻿# SRK Kupang LAN School App
+# SRK Kupang LAN School App
 
 LAN-only web app for:
 - Teacher login
@@ -24,12 +24,13 @@ Open: `http://<your-lan-ip>:3000`
 
 ## CSV import format (Admin)
 Headers required:
-`class_name,No.SB,student_id,full_name,nickname,dob,photo_url,emergency_contact,siblings_student_ids`
+`class_name,No.SB,student_id,familyID,full_name,nickname,dob,photo_url,emergency_contact`
 
 - `class_name` must match existing class names.
-- `siblings_student_ids` must be semicolon-separated existing `student_id` values.
+- `familyID` links students in the same family.
 
 ## Notes
 - Session cookie is browser-session scoped (logout when browser closes).
 - Inactivity timeout is 2 minutes (server + client side).
 - Daily points snapshots are stored in `daily_points`.
+

@@ -7,39 +7,33 @@
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body class="leaderboard-bg">
-  <main class="leaderboard-screen">
-    <header class="leaderboard-top">
-      <div>
-        <h1>Leaderboard</h1>
-        <div class="leaderboard-sub"><%= cls.name %></div>
-      </div>
-      <div class="button-row">
-        <a class="btn secondary" href="/leaderboard">Classes</a>
-        <a class="btn secondary" href="/">Home</a>
-      </div>
+  <main class="leaderboard-screen leaderboard-v2 leaderboard-ref" id="leaderboardTable" data-class-id="<%= cls.id %>">
+    <header class="leaderboard-titlebar">
+      <span class="title-icon ring"></span>
+      <h1>Leaderboard</h1>
+      <button type="button" id="leaderboardMenuBtn" class="title-icon-btn" aria-label="Leaderboard menu" aria-expanded="false">
+        <span class="title-icon menu"></span>
+      </button>
     </header>
 
-    <section id="leaderboardTable" data-class-id="<%= cls.id %>" class="leaderboard-list-shell">
-      <div id="leaderboardRows" class="leaderboard-list">
-        <% let prevPts = null; let prevRank = 0; %>
-        <% rows.forEach((r, i) => { %>
-          <% const pts = Number(r.total_points || 0); %>
-          <% const rank = (prevPts !== null && pts === prevPts) ? prevRank : (i + 1); %>
-          <% prevPts = pts; prevRank = rank; %>
-          <article class="leaderboard-row rank-<%= rank <= 3 ? rank : 0 %>">
-            <div class="avatar-dot"><%= (r.nickname || '?').charAt(0).toUpperCase() %></div>
-            <div class="name-block">
-              <div class="name-text"><%= r.nickname %></div>
-              <div class="points-text"><%= pts.toLocaleString() %> points</div>
-            </div>
-            <div class="rank-badge"><%= rank %></div>
-          </article>
-        <% }) %>
-      </div>
+    <div class="leaderboard-sub center"><%= cls.name %></div>
+
+    <div id="leaderboardMenuPanel" class="leaderboard-menu-panel hidden" role="menu">
+      <button type="button" class="menu-item active" data-sort-mode="desc">Sort: Descending</button>
+      <button type="button" class="menu-item" data-sort-mode="asc">Sort: Ascending</button>
+      <a class="menu-link" href="/leaderboard">All Classes</a>
+      <a class="menu-link" href="/">Home</a>
+    </div>
+
+    <section class="leaderboard-list-shell">
+      <section class="leaderboard-podium" id="leaderboardPodium"></section>
+      <div class="leaderboard-divider fancy"></div>
+      <section class="leaderboard-list" id="leaderboardRows"></section>
       <div class="leaderboard-meta" id="lastUpdated">Last updated: <%= generatedAt %></div>
     </section>
   </main>
 
+  <script id="leaderboardInitialRows" type="application/json"><%- JSON.stringify(rows) %></script>
   <script src="/js/leaderboard.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -6,35 +6,57 @@
   <title>SRKupang</title>
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
-<body>
-  <header class="site-header">
-    <h1>Sekolah Rendah OKAWSD Kupang, Tutong</h1>
+<body class="landing-home">
+  <div class="landing-glow glow-a"></div>
+  <div class="landing-glow glow-b"></div>
+
+  <header class="site-header landing-header">
     <div>
-      <a class="btn subtle" href="/login/admin">Admin</a>
+      <h1>Sekolah Rendah OKAWSD Kupang, Tutong</h1>
+      <p class="landing-subtitle">Reward, Student, Calendar and Leaderboard Hub</p>
     </div>
+    <a class="admin-chip" href="/login/admin">Admin</a>
   </header>
-  <main class="landing-grid">
-    <section class="left-panel">
-      <a class="btn large" href="/login/teacher">Teacher Login</a>
-      <a class="btn large secondary" href="/leaderboard">Leaderboard</a>
+
+  <main class="landing-shell">
+    <section class="landing-card quick-access">
+      <h2>Quick Access</h2>
+      <p class="muted">Select a destination</p>
+
+      <a class="landing-action teacher" href="/login/teacher">
+        <span class="action-title">USER ID</span>
+        <span class="action-desc">Manage rewards, students, reports</span>
+      </a>
+
+      <a class="landing-action leaderboard" href="/leaderboard">
+        <span class="action-title">Leaderboard</span>
+        <span class="action-desc">Display class rankings live</span>
+      </a>
     </section>
 
-    <section class="right-panel">
-      <h2>Upcoming Events (Today + 7 days)</h2>
+    <section class="landing-card events-card">
+      <div class="events-head">
+        <h2>Upcoming Events</h2>
+        <span class="events-range">Today + 7 days</span>
+      </div>
+
       <% if (!events.length) { %>
-        <p>No upcoming events.</p>
+        <div class="event-empty">No upcoming events.</div>
+      <% } else { %>
+        <div class="event-cards">
+          <% events.forEach(event => { %>
+            <article class="event-item">
+              <div class="event-date"><%= event.event_date %></div>
+              <div class="event-title"><%= event.title %></div>
+              <% if (event.details) { %>
+                <div class="event-detail"><%= event.details %></div>
+              <% } %>
+            </article>
+          <% }) %>
+        </div>
       <% } %>
-      <ul class="event-list">
-        <% events.forEach(event => { %>
-          <li>
-            <strong><%= event.event_date %></strong> - <%= event.title %>
-            <% if (event.details) { %>
-              <div class="muted"><%= event.details %></div>
-            <% } %>
-          </li>
-        <% }) %>
-      </ul>
     </section>
   </main>
 </body>
 </html>
+

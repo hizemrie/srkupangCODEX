@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -17,27 +17,276 @@
       <section class="card"><div><%= success %></div></section>
     <% } %>
 
-    <section class="card">
-      <h2>Backup and Restore</h2>
-      <div class="stack">
-        <div class="inline-filters">
-          <a class="btn" href="/admin/backup/download">Download Full Backup</a>
-        </div>
+        <section class="card">
+      <h2>User Management</h2>
+      <p class="muted">Use USER ID for all accounts (admin, teachers and support staff).</p>
 
-        <form class="inline-filters" method="post" action="/admin/backup/save-path">
-          <input type="text" name="destination_path" placeholder="Destination folder path (example: D:\\school-backups)" required style="min-width: 320px;" />
-          <button class="btn" type="submit">Save Backup to Folder</button>
-        </form>
+      <form class="form inline-filters" method="post" action="/admin/users/add">
+        <input type="text" name="username" placeholder="USER ID" required />
+        <input type="text" name="display_name" placeholder="Full name" required />
+        <input type="password" name="password" placeholder="Password" required />
+        <select name="role">
+          <option value="admin">admin</option>
+          <option value="teacher">teacher</option>
+          <option value="staff">staff</option>
+        </select>
+        <select name="user_type">
+          <option value="admin">admin</option>
+          <option value="teacher" selected>teacher</option>
+          <option value="staff">staff</option>
+        </select>
+        <select name="is_active">
+          <option value="1" selected>active</option>
+          <option value="0">inactive</option>
+        </select>
+        <button class="btn" type="submit">Add User Account</button>
+      </form>
 
-        <form class="inline-filters" method="post" action="/admin/backup/restore" enctype="multipart/form-data">
-          <input type="file" name="backup_file" accept=".json,application/json" required />
-          <button class="btn danger" type="submit" onclick="return confirm('Restore will replace all current data. Continue?');">Restore from Backup File</button>
-        </form>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>USER ID</th><th>Name</th><th>Role</th><th>User Type</th><th>Active</th><th>Created</th><th>Edit User</th><th>Reset Password</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <% staffUsers.forEach(t => { %>
+            <tr>
+              <td><%= t.id %></td>
+              <td><%= t.username %></td>
+              <td><%= t.display_name %></td>
+              <td><%= t.role %></td>
+              <td><%= t.user_type %></td>
+              <td><%= Number(t.is_active) === 1 ? 'Yes' : 'No' %></td>
+              <td><%= t.created_at %></td>
+              <td>
+                <form class="inline-filters" method="post" action="/admin/users/update">
+                  <input type="hidden" name="user_id" value="<%= t.id %>" />
+                  <input type="text" name="username" value="<%= t.username %>" placeholder="USER ID" required />
+                  <input type="text" name="display_name" value="<%= t.display_name %>" placeholder="Full name" required />
+                  <select name="role">
+                    <option value="admin" <%= t.role === 'admin' ? 'selected' : '' %>>admin</option>
+                    <option value="teacher" <%= t.role === 'teacher' ? 'selected' : '' %>>teacher</option>
+                    <option value="staff" <%= t.role === 'staff' ? 'selected' : '' %>>staff</option>
+                  </select>
+                  <select name="user_type">
+                    <option value="admin" <%= t.user_type === 'admin' ? 'selected' : '' %>>admin</option>
+                    <option value="teacher" <%= t.user_type === 'teacher' ? 'selected' : '' %>>teacher</option>
+                    <option value="staff" <%= t.user_type === 'staff' ? 'selected' : '' %>>staff</option>
+                  </select>
+                  <select name="is_active">
+                    <option value="1" <%= Number(t.is_active) === 1 ? 'selected' : '' %>>active</option>
+                    <option value="0" <%= Number(t.is_active) === 0 ? 'selected' : '' %>>inactive</option>
+                  </select>
+                  <button class="btn secondary" type="submit">Save</button>
+                </form>
+              </td>
+              <td>
+                <form class="inline-filters" method="post" action="/admin/teachers/reset-password">
+                  <input type="hidden" name="user_id" value="<%= t.id %>" />
+                  <input type="password" name="new_password" placeholder="New password" required />
+                  <button class="btn" type="submit">Reset</button>
+                </form>
+              </td>
+              <td>
+                <form class="inline-filters" method="post" action="/admin/staff/set-active">
+                  <input type="hidden" name="user_id" value="<%= t.id %>" />
+                  <input type="hidden" name="is_active" value="<%= Number(t.is_active) === 1 ? 0 : 1 %>" />
+                  <button class="btn <%= Number(t.is_active) === 1 ? 'danger' : 'secondary' %>" type="submit"><%= Number(t.is_active) === 1 ? 'Deactivate' : 'Activate' %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <h3>Import Staff by CSV</h3>
+      <p class="muted">Required fields: user_id, full_name, password. Optional: role, user_type, is_active. Duplicate USER ID rows are skipped for safety.</p>
+      <div class="inline-filters" style="margin-bottom:8px;">
+        <a class="btn secondary" href="/admin/staff/template">Download CSV Template</a>
+      </div>
+      <form method="post" action="/admin/staff/import" enctype="multipart/form-data" class="inline-filters" id="staffImportForm">
+        <input type="file" name="staff_csv" id="staffCsvInput" accept=".csv" required />
+        <button class="btn" type="submit">Import Staff CSV</button>
+      </form>
+      <div id="staffImportPreviewWrap" style="display:none; margin-top:10px;">
+        <h4>CSV Preview (first 10 rows)</h4>
+        <table>
+          <thead>
+            <tr><th>USER ID</th><th>Full Name</th><th>Role</th><th>Active</th></tr>
+          </thead>
+          <tbody id="staffImportPreviewBody"></tbody>
+        </table>
       </div>
     </section>
 
     <section class="card">
-      <h2>Deleted Events (Teacher Deleted)</h2>
+      <h2>Edit Student Details</h2>
+      <form class="inline-filters" method="get" action="/admin/dashboard">
+        <label>Class
+          <select name="class_id" onchange="this.form.submit()">
+            <% classes.forEach(c => { %>
+              <option value="<%= c.id %>" <%= Number(selectedClassId) === Number(c.id) ? 'selected' : '' %>><%= c.name %></option>
+            <% }) %>
+          </select>
+        </label>
+        <noscript><button class="btn" type="submit">Load Students</button></noscript>
+      </form>
+
+      <form class="inline-filters" method="get" action="/admin/dashboard" style="margin-top:10px;">
+        <input type="hidden" name="class_id" value="<%= selectedClassId || '' %>" />
+        <label>Student Name
+          <select name="student_pk" onchange="this.form.submit()" <%= studentsInClass.length ? '' : 'disabled' %>>
+            <% if (!studentsInClass.length) { %>
+              <option value="">No students in class</option>
+            <% } %>
+            <% studentsInClass.forEach(s => { %>
+              <option value="<%= s.id %>" <%= Number(selectedStudentId) === Number(s.id) ? 'selected' : '' %>>
+                <%= s.nickname %> - <%= s.full_name %>
+              </option>
+            <% }) %>
+          </select>
+        </label>
+        <noscript><button class="btn" type="submit">Load Student</button></noscript>
+      </form>
+
+      <% if (selectedStudent) { %>
+        <form class="form grid-form" method="post" action="/admin/students/update/<%= selectedStudent.id %>" style="margin-top:12px;" enctype="multipart/form-data">
+          <label>Class
+            <select name="class_id" required>
+              <% classes.forEach(c => { %>
+                <option value="<%= c.id %>" <%= Number(selectedStudent.class_id) === Number(c.id) ? 'selected' : '' %>><%= c.name %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>Student ID<input type="text" name="student_id" value="<%= selectedStudent.student_id %>" required /></label>
+          <label>FamilyID<input type="text" name="familyID" value="<%= selectedStudent.family_id || "" %>" placeholder="FAM001" /></label>
+          <label>No.SB<input type="text" name="no_sb" value="<%= selectedStudent.no_sb %>" required /></label>
+          <label>Full Name<input type="text" name="full_name" value="<%= selectedStudent.full_name %>" required /></label>
+          <label>Nickname<input type="text" name="nickname" value="<%= selectedStudent.nickname %>" required /></label>
+          <label>DOB<input type="date" name="dob" value="<%= selectedStudent.dob %>" required /></label>
+          <label>Gender
+            <select name="gender">
+              <option value="" <%= !selectedStudent.gender ? 'selected' : '' %>>Select gender</option>
+              <option value="Male" <%= selectedStudent.gender === 'Male' ? 'selected' : '' %>>Male</option>
+              <option value="Female" <%= selectedStudent.gender === 'Female' ? 'selected' : '' %>>Female</option>
+            </select>
+          </label>
+          <label>Address<input type="text" name="address" value="<%= selectedStudent.address || '' %>" /></label>
+          <label>Status
+            <select name="student_status" required>
+              <option value="active" <%= (selectedStudent.student_status || 'active') === 'active' ? 'selected' : '' %>>Active</option>
+              <option value="transferred" <%= selectedStudent.student_status === 'transferred' ? 'selected' : '' %>>Transferred</option>
+              <option value="graduated" <%= selectedStudent.student_status === 'graduated' ? 'selected' : '' %>>Graduated</option>
+            </select>
+          </label>
+          <label>Notes
+            <select name="notes">
+              <option value="" <%= !selectedStudent.notes ? 'selected' : '' %>>None</option>
+              <option value="prefect" <%= selectedStudent.notes === 'prefect' ? 'selected' : '' %>>Prefect</option>
+              <option value="class monitor" <%= selectedStudent.notes === 'class monitor' ? 'selected' : '' %>>Class Monitor</option>
+              <option value="assistant class monitor" <%= selectedStudent.notes === 'assistant class monitor' ? 'selected' : '' %>>Assistant Class Monitor</option>
+            </select>
+          </label>
+          <input type="hidden" name="existing_photo_path" value="<%= selectedStudent.photo_path || '' %>" />
+          <label>Current Photo
+            <% if (selectedStudent.photo_path || selectedStudent.photo_url) { %>
+              <img src="<%= selectedStudent.photo_path || selectedStudent.photo_url %>" alt="Current student photo" class="avatar" style="width:72px;height:72px;" />
+            <% } else { %>
+              <span class="muted">No photo</span>
+            <% } %>
+          </label>
+          <label>Replace Photo<input type="file" name="photo_file" accept="image/*" /></label>
+          <label>Photo URL (fallback)<input type="url" name="photo_url" value="<%= selectedStudent.photo_url || '' %>" /></label>
+          <label>Emergency Contact<input type="text" name="emergency_contact" value="<%= selectedStudent.emergency_contact %>" required /></label>
+          <button class="btn" type="submit">Save Student Changes</button>
+        </form>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <h2>Active Calendar Events</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Start</th>
+            <th>End</th>
+            <th>Title</th>
+            <th>Source</th>
+            <th>Created By</th>
+            <th>Created At</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!activeEvents.length) { %>
+            <tr><td colspan="7" class="muted">No active events.</td></tr>
+          <% } %>
+          <% activeEvents.forEach(ev => { %>
+            <tr>
+              <td><%= ev.event_date %></td>
+              <td><%= ev.end_date %></td>
+              <td><%= ev.title %></td>
+              <td><%= ev.event_source || 'manual' %></td>
+              <td><%= ev.creator_name || '-' %></td>
+              <td><%= ev.created_at %></td>
+              <td>
+                <% if ((ev.event_source || 'manual') === 'manual') { %>
+                  <form method="post" action="/admin/calendar/delete/<%= ev.id %>" onsubmit="return confirm('Delete this event?');">
+                    <button class="btn danger" type="submit">Delete Event</button>
+                  </form>
+                <% } else { %>
+                  <span class="muted">Protected</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+    <section class="card">
+      <div class="calendar-import-head">
+        <h2>Calendar Import</h2>
+        <button type="button" id="toggleImportBtn" class="btn">Import Events</button>
+      </div>
+
+      <div id="jsonImportPanel" class="stack" style="display:none;">
+        <div class="inline-filters">
+          <label>Upload JSON File
+            <input type="file" id="eventsJsonFile" accept="application/json,.json" />
+          </label>
+        </div>
+
+        <label>Paste JSON Array
+          <textarea id="eventsJsonText" rows="10" placeholder='[
+  {"title":"Cuti Penggal Persekolahan","start_date":"2026-03-13","end_date":"2026-03-29","all_day":true,"labels":["Cuti Penggal"],"description":"Cuti penggal persekolahan."}
+]'></textarea>
+        </label>
+
+        <div class="inline-filters">
+          <button type="button" class="btn secondary" id="previewImportBtn">Preview</button>
+          <button type="button" class="btn" id="submitImportBtn">Import to Calendar</button>
+        </div>
+
+        <div id="importSummary" class="muted"></div>
+
+        <div id="importPreviewWrap" style="display:none;">
+          <h3>Preview</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Labels</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="importPreviewBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Deleted Events (Staff Deleted)</h2>
       <table>
         <thead>
           <tr>
@@ -71,42 +320,11 @@
       </table>
     </section>
 
-    <section class="card">
-      <h2>Teachers</h2>
-      <form class="form inline-filters" method="post" action="/admin/teachers/add">
-        <input type="text" name="username" placeholder="Username" required />
-        <input type="text" name="display_name" placeholder="Display name" required />
-        <input type="password" name="password" placeholder="Password" required />
-        <button class="btn" type="submit">Add Teacher</button>
-      </form>
-
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Username</th><th>Name</th><th>Created</th><th>Reset Password</th></tr>
-        </thead>
-        <tbody>
-          <% teachers.forEach(t => { %>
-            <tr>
-              <td><%= t.id %></td>
-              <td><%= t.username %></td>
-              <td><%= t.display_name %></td>
-              <td><%= t.created_at %></td>
-              <td>
-                <form class="inline-filters" method="post" action="/admin/teachers/reset-password">
-                  <input type="hidden" name="teacher_id" value="<%= t.id %>" />
-                  <input type="password" name="new_password" placeholder="New password" required />
-                  <button class="btn" type="submit">Reset</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </section>
+    
 
     <section class="card">
       <h2>Add Student Manually</h2>
-      <form class="form grid-form" method="post" action="/admin/students/add">
+      <form class="form grid-form" method="post" action="/admin/students/add" enctype="multipart/form-data">
         <label>Class
           <select name="class_id" required>
             <% classes.forEach(c => { %>
@@ -115,28 +333,235 @@
           </select>
         </label>
         <label>Student ID<input type="text" name="student_id" required /></label>
+        <label>FamilyID<input type="text" name="familyID" placeholder="FAM001" /></label>
         <label>No.SB<input type="text" name="no_sb" required /></label>
         <label>Full Name<input type="text" name="full_name" required /></label>
         <label>Nickname<input type="text" name="nickname" required /></label>
         <label>DOB<input type="date" name="dob" required /></label>
-        <label>Photo URL<input type="url" name="photo_url" /></label>
-        <label>Emergency Contact<input type="text" name="emergency_contact" required /></label>
-        <label>Siblings by Student ID (semicolon separated)
-          <input type="text" name="siblings_student_ids" placeholder="STU0002;STU0003" />
+        <label>Gender
+          <select name="gender">
+            <option value="">Select gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
         </label>
+        <label>Address<input type="text" name="address" /></label>
+        <label>Status
+          <select name="student_status" required>
+            <option value="active" selected>Active</option>
+            <option value="transferred">Transferred</option>
+            <option value="graduated">Graduated</option>
+          </select>
+        </label>
+        <label>Notes
+          <select name="notes">
+            <option value="">None</option>
+            <option value="prefect">Prefect</option>
+            <option value="class monitor">Class Monitor</option>
+            <option value="assistant class monitor">Assistant Class Monitor</option>
+          </select>
+        </label>
+        <label>Photo Upload<input type="file" name="photo_file" accept="image/*" /></label>
+        <label>Photo URL (fallback)<input type="url" name="photo_url" /></label>
+        <label>Emergency Contact<input type="text" name="emergency_contact" required /></label>
         <button class="btn" type="submit">Add Student</button>
       </form>
     </section>
 
+    
+
     <section class="card">
       <h2>Import Students by CSV</h2>
-      <p class="muted">Required CSV columns: class_name,No.SB,student_id,full_name,nickname,dob,photo_url,emergency_contact,siblings_student_ids</p>
+      <p class="muted">Required CSV columns: class_name,No.SB,student_id,familyID,full_name,nickname,dob,photo_url,emergency_contact. Optional: gender,address,student_status,notes</p>
       <form method="post" action="/admin/students/import" enctype="multipart/form-data" class="inline-filters">
         <input type="file" name="students_csv" accept=".csv" required />
         <button class="btn" type="submit">Import CSV</button>
       </form>
     </section>
+
+    <section class="card">
+      <h2>Backup and Restore</h2>
+      <div class="stack">
+        <div class="inline-filters">
+          <a class="btn" href="/admin/backup/download">Download Full Backup</a>
+        </div>
+
+        <form class="inline-filters" method="post" action="/admin/backup/save-path">
+          <input type="text" name="destination_path" placeholder="Destination folder path (example: D:\\school-backups)" required style="min-width: 320px;" />
+          <button class="btn" type="submit">Save Backup to Folder</button>
+        </form>
+
+        <form class="inline-filters" method="post" action="/admin/backup/restore" enctype="multipart/form-data">
+          <input type="file" name="backup_file" accept=".json,application/json" required />
+          <button class="btn danger" type="submit" onclick="return confirm('Restore will replace all current data. Continue?');">Restore from Backup File</button>
+        </form>
+      </div>
+    </section>
   </main>
+
+    <script>
+    (function () {
+      var toggleBtn = document.getElementById('toggleImportBtn');
+      var panel = document.getElementById('jsonImportPanel');
+      var fileInput = document.getElementById('eventsJsonFile');
+      var textInput = document.getElementById('eventsJsonText');
+      var previewBtn = document.getElementById('previewImportBtn');
+      var importBtn = document.getElementById('submitImportBtn');
+      var previewWrap = document.getElementById('importPreviewWrap');
+      var previewBody = document.getElementById('importPreviewBody');
+      var summary = document.getElementById('importSummary');
+
+      var staffCsvInput = document.getElementById('staffCsvInput');
+      var staffPreviewWrap = document.getElementById('staffImportPreviewWrap');
+      var staffPreviewBody = document.getElementById('staffImportPreviewBody');
+
+      function setSummary(msg, isError) {
+        if (!summary) return;
+        summary.textContent = msg;
+        summary.className = isError ? 'error' : 'muted';
+      }
+
+      if (toggleBtn && panel) {
+        function parseImportJson() {
+          var raw = (textInput.value || '').trim();
+          if (!raw) throw new Error('Please paste JSON text or choose a file first.');
+          var parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) throw new Error('JSON root must be an array.');
+          return parsed;
+        }
+
+        function renderPreview(rows) {
+          previewBody.innerHTML = '';
+          rows.slice(0, 100).forEach(function (ev) {
+            var tr = document.createElement('tr');
+            var labels = Array.isArray(ev.labels) ? ev.labels.join(', ') : '';
+            tr.innerHTML =
+              '<td>' + (ev.title || '') + '</td>' +
+              '<td>' + (ev.start_date || '') + '</td>' +
+              '<td>' + (ev.end_date || '') + '</td>' +
+              '<td>' + labels + '</td>' +
+              '<td>' + (ev.description || ev.details || '') + '</td>';
+            previewBody.appendChild(tr);
+          });
+          previewWrap.style.display = rows.length ? 'block' : 'none';
+        }
+
+        toggleBtn.addEventListener('click', function () {
+          panel.style.display = panel.style.display === 'none' ? 'grid' : 'none';
+        });
+
+        fileInput.addEventListener('change', function () {
+          var file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function () {
+            textInput.value = String(reader.result || '').trim();
+            setSummary('JSON file loaded. Click Preview to verify.', false);
+          };
+          reader.onerror = function () {
+            setSummary('Failed to read file.', true);
+          };
+          reader.readAsText(file);
+        });
+
+        previewBtn.addEventListener('click', function () {
+          try {
+            var rows = parseImportJson();
+            renderPreview(rows);
+            setSummary('Preview ready: ' + rows.length + ' event(s).', false);
+          } catch (err) {
+            setSummary(err.message || String(err), true);
+            previewWrap.style.display = 'none';
+          }
+        });
+
+        importBtn.addEventListener('click', function () {
+          var rows;
+          try {
+            rows = parseImportJson();
+          } catch (err) {
+            setSummary(err.message || String(err), true);
+            return;
+          }
+
+          fetch('/api/calendar/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rows)
+          })
+            .then(function (res) {
+              return res.json().then(function (data) {
+                return { ok: res.ok, data: data };
+              });
+            })
+            .then(function (result) {
+              var data = result.data || {};
+              var errorMsg = Array.isArray(data.errors) && data.errors.length
+                ? (' Errors: ' + data.errors.slice(0, 5).join(' | '))
+                : '';
+              var msg = 'Inserted: ' + (data.inserted || 0) + ', Skipped: ' + (data.skipped || 0) + '.' + errorMsg;
+              setSummary(msg, !result.ok);
+              if (result.ok) {
+                setTimeout(function () { window.location.reload(); }, 1200);
+              }
+            })
+            .catch(function (err) {
+              setSummary('Import request failed: ' + (err.message || String(err)), true);
+            });
+        });
+      }
+
+      if (staffCsvInput && staffPreviewWrap && staffPreviewBody) {
+        staffCsvInput.addEventListener('change', function () {
+          var file = staffCsvInput.files && staffCsvInput.files[0];
+          if (!file) {
+            staffPreviewWrap.style.display = 'none';
+            return;
+          }
+
+          var reader = new FileReader();
+          reader.onload = function () {
+            var text = String(reader.result || '').trim();
+            var lines = text.split(/\r?\n/).filter(Boolean);
+            if (lines.length <= 1) {
+              staffPreviewWrap.style.display = 'none';
+              return;
+            }
+
+            var headers = lines[0].split(',').map(function (h) { return h.trim().toLowerCase(); });
+            var idxUserId = headers.indexOf('user_id');
+            var idxName = headers.indexOf('full_name');
+            var idxRole = headers.indexOf('role');
+            var idxActive = headers.indexOf('is_active');
+
+            staffPreviewBody.innerHTML = '';
+            lines.slice(1, 11).forEach(function (line) {
+              var cols = line.split(',').map(function (x) { return x.trim(); });
+              var tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + (idxUserId >= 0 ? (cols[idxUserId] || '') : '') + '</td>' +
+                '<td>' + (idxName >= 0 ? (cols[idxName] || '') : '') + '</td>' +
+                '<td>' + (idxRole >= 0 ? (cols[idxRole] || '') : 'teacher') + '</td>' +
+                '<td>' + (idxActive >= 0 ? (cols[idxActive] || '') : 'true') + '</td>';
+              staffPreviewBody.appendChild(tr);
+            });
+            staffPreviewWrap.style.display = 'block';
+          };
+          reader.readAsText(file);
+        });
+      }
+    })();
+  </script>
+
   <script src="/js/inactivity.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+

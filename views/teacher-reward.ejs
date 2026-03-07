@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,6 +9,15 @@
 <body>
   <%- include('partials/teacher-nav') %>
   <main class="container reward-container">
+    <section class="card">
+      <h3>Quick Class Switch</h3>
+      <div class="button-row">
+        <% classes.forEach(c => { %>
+          <a class="btn <%= Number(cls.id) === Number(c.id) ? '' : 'secondary' %>" href="/teacher/reward/<%= c.id %>"><%= c.name %></a>
+        <% }) %>
+      </div>
+    </section>
+
     <h2>Reward System: <%= cls.name %></h2>
 
     <div class="reward-grid-compact">
@@ -16,8 +25,13 @@
         <div class="reward-tile">
           <div class="reward-tile-head">
             <div class="reward-name-wrap">
-              <div class="reward-nickname"><%= st.nickname %></div>
-              <div class="reward-fullname"><%= st.full_name %></div>
+              <button type="button" class="reward-thumb-btn photo-preview-trigger" data-photo-src="<%= st.photo_src || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(st.nickname || 'student')) %>" data-photo-name="<%= st.full_name %>">
+                <img class="reward-thumb" src="<%= st.photo_src || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(st.nickname || 'student')) %>" alt="<%= st.nickname %>" />
+              </button>
+              <div class="reward-name-block">
+                <div class="reward-nickname"><%= st.nickname %></div>
+                <div class="reward-fullname"><%= st.full_name %></div>
+              </div>
             </div>
             <div class="reward-points">Pts: <strong><%= st.total_points %></strong></div>
           </div>
@@ -79,7 +93,15 @@
       </form>
     </div>
   </div>
-
+  <div id="photoPreviewModal" class="reward-modal hidden" aria-hidden="true">
+    <div class="reward-modal-card reward-photo-modal-card">
+      <div class="reward-photo-modal-head">
+        <h3 id="photoPreviewName">Student Photo</h3>
+        <button type="button" class="btn subtle secondary" id="photoPreviewClose">Close</button>
+      </div>
+      <img id="photoPreviewImage" class="reward-photo-preview" src="" alt="Student photo preview" />
+    </div>
+  </div>
   <script>
     (function () {
       var modal = document.getElementById('awardModal');
@@ -92,6 +114,10 @@
       var reason = document.getElementById('modalReason');
       var customReason = document.getElementById('modalCustomReason');
       var cancelBtn = document.getElementById('modalCancel');
+      var photoPreviewModal = document.getElementById('photoPreviewModal');
+      var photoPreviewImage = document.getElementById('photoPreviewImage');
+      var photoPreviewName = document.getElementById('photoPreviewName');
+      var photoPreviewClose = document.getElementById('photoPreviewClose');
 
       function openModal(studentId, classId, mode) {
         modalStudentId.value = studentId;
@@ -121,6 +147,21 @@
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
       }
+      function openPhotoPreview(src, name) {
+        if (!photoPreviewModal || !photoPreviewImage) return;
+        photoPreviewImage.src = src || '';
+        photoPreviewImage.alt = (name || 'Student') + ' photo preview';
+        if (photoPreviewName) photoPreviewName.textContent = name || 'Student Photo';
+        photoPreviewModal.classList.remove('hidden');
+        photoPreviewModal.setAttribute('aria-hidden', 'false');
+      }
+
+      function closePhotoPreview() {
+        if (!photoPreviewModal || !photoPreviewImage) return;
+        photoPreviewModal.classList.add('hidden');
+        photoPreviewModal.setAttribute('aria-hidden', 'true');
+        photoPreviewImage.src = '';
+      }
 
       document.querySelectorAll('.award-trigger').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -130,9 +171,25 @@
 
       cancelBtn.addEventListener('click', closeModal);
 
+      document.querySelectorAll('.photo-preview-trigger').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openPhotoPreview(btn.dataset.photoSrc, btn.dataset.photoName);
+        });
+      });
+
+      if (photoPreviewClose) {
+        photoPreviewClose.addEventListener('click', closePhotoPreview);
+      }
+
       modal.addEventListener('click', function (e) {
         if (e.target === modal) closeModal();
       });
+
+      if (photoPreviewModal) {
+        photoPreviewModal.addEventListener('click', function (e) {
+          if (e.target === photoPreviewModal) closePhotoPreview();
+        });
+      }
 
       modalForm.addEventListener('submit', function (e) {
         var chosenReason = (reason.value || '').trim();
@@ -157,3 +214,7 @@
   <script src="/js/inactivity.js"></script>
 </body>
 </html>
+
+
+
+

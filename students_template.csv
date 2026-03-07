@@ -1,0 +1,6 @@
+class_name,No.SB,student_id,familyID,full_name,nickname,dob,gender,address,student_status,notes,photo_url,emergency_contact
+YEAR 1,NSB0001,STU0001,FAM001,Ahmad bin Ali,Ahmad01,2017-03-15,Male,"Kg. Example, Tutong",active,prefect,https://example.com/photo1.jpg,+6738123456
+YEAR 1,NSB0002,STU0002,FAM001,Siti binti Omar,Siti02,2017-06-20,Female,"Kg. Example, Tutong",active,class monitor,https://example.com/photo2.jpg,+6738234567
+YEAR 2,NSB0003,STU0003,FAM001,Nur Aisyah,Nur03,2016-11-05,Female,"Kg. Another, Tutong",transferred,,https://example.com/photo3.jpg,+6738345678
+YEAR 3,NSB0004,STU0004,FAM002,Hakim bin Salleh,Hakim04,2015-09-12,Male,"Kg. Baru, Tutong",active,assistant class monitor,https://example.com/photo4.jpg,+6738456789
+YEAR 5,NSB0005,STU0005,FAM002,Alya binti Salleh,Alya05,2013-12-30,Female,"Kg. Baru, Tutong",active,,https://example.com/photo5.jpg,+6738567890

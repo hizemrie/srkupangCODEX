@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const bcrypt = require("bcryptjs");
 const { db } = require("../db/init");
 
@@ -10,9 +10,11 @@ router.get("/login/teacher", (req, res) => {
 
 router.post("/login/teacher", (req, res) => {
   const { username, password } = req.body;
-  const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'teacher'").get(username);
+  const user = db
+    .prepare("SELECT * FROM users WHERE username = ? AND role IN ('teacher','staff')")
+    .get(username);
 
-  if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
+  if (!user || Number(user.is_active || 0) !== 1 || !bcrypt.compareSync(password || "", user.password_hash)) {
     return res.status(401).render("login", { role: "teacher", error: "Invalid credentials" });
   }
 
@@ -28,7 +30,7 @@ router.post("/login/admin", (req, res) => {
   const { username, password } = req.body;
   const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'admin'").get(username);
 
-  if (!user || !bcrypt.compareSync(password || "", user.password_hash)) {
+  if (!user || Number(user.is_active || 0) !== 1 || !bcrypt.compareSync(password || "", user.password_hash)) {
     return res.status(401).render("login", { role: "admin", error: "Invalid credentials" });
   }
 

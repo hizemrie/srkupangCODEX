@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -6,9 +6,16 @@
   <title>Calendar</title>
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
-<body>
+<body class="calendar-ref-dark">
   <%- include('partials/teacher-nav') %>
   <main class="container">
+    <% if (error) { %>
+      <section class="card"><div class="error"><%= error %></div></section>
+    <% } %>
+    <% if (success) { %>
+      <section class="card"><div><%= success %></div></section>
+    <% } %>
+
     <div class="calendar-header-row">
       <h2>School Calendar</h2>
       <div class="button-row">
@@ -42,10 +49,18 @@
           <div class="calendar-spans" style="--lanes:<%= week.laneCount %>">
             <% week.spans.forEach(span => { %>
               <div
-                class="event-span <%= span.continuesLeft ? 'cont-left' : '' %> <%= span.continuesRight ? 'cont-right' : '' %>"
+                class="event-span <%= span.continuesLeft ? 'cont-left' : '' %> <%= span.continuesRight ? 'cont-right' : '' %> <%= span.isSystem ? 'system' : '' %>"
+                data-event-id="<%= span.id %>"
                 style="grid-column: <%= span.startCol %> / <%= span.endCol %>; grid-row: <%= span.lane + 1 %>; background: <%= span.color %>;"
-                title="<%= span.title %><%= span.details ? ' - ' + span.details : '' %>">
+                title="<%= span.title %><%= span.details ? ' - ' + span.details : '' %><%= (span.taggedUsers && span.taggedUsers.length) ? ' | Users: ' + span.taggedUsers.map(u => u.display_name).join(', ') : '' %>">
                 <span><%= span.title %></span>
+                <% if (span.labels && span.labels.length) { %>
+                  <span class="event-label-dots">
+                    <% span.labels.slice(0, 3).forEach(lb => { %>
+                      <i class="event-label-dot" style="background:<%= lb.color %>" title="<%= lb.name %>"></i>
+                    <% }) %>
+                  </span>
+                <% } %>
               </div>
             <% }) %>
           </div>
@@ -53,24 +68,173 @@
       <% }) %>
     </section>
 
-    <form class="card form calendar-add-form" method="post" action="/teacher/calendar/add">
-      <h3>Add Event</h3>
-      <div class="inline-filters">
-        <label>Title
-          <input type="text" name="title" required />
-        </label>
-        <label>Details
-          <input type="text" name="details" />
-        </label>
-        <label>Start Date
-          <input type="date" name="event_date" required />
-        </label>
-        <label>End Date
-          <input type="date" name="end_date" />
-        </label>
-        <button class="btn" type="submit">Add Event</button>
+    <div id="calendarEventModal" class="calendar-event-modal hidden" role="dialog" aria-modal="true" aria-labelledby="calendarEventTitle">
+      <div class="calendar-event-modal-card">
+        <div class="calendar-event-modal-head">
+          <h3 id="calendarEventTitle">Event Details</h3>
+          <button type="button" class="btn subtle" id="calendarEventCloseX">Close</button>
+        </div>
+
+        <div class="calendar-event-detail-block">
+          <p><strong>Date:</strong> <span id="calendarEventDate"></span></p>
+          <p><strong>Created by:</strong> <span id="calendarEventCreator"></span></p>
+          <p><strong>Details:</strong> <span id="calendarEventDetails"></span></p>
+          <p><strong>Labels:</strong></p>
+          <div id="calendarEventLabels" class="calendar-inline-labels"></div>
+          <p><strong>Tagged users:</strong> <span id="calendarEventTaggedUsers"></span></p>
+        </div>
+
+        <form id="calendarEventEditForm" method="post" class="form hidden">
+          <label>Title<input type="text" name="title" required /></label>
+          <label>Details<input type="text" name="details" /></label>
+          <label>Start Date<input type="date" name="event_date" required /></label>
+          <label>End Date<input type="date" name="end_date" /></label>
+
+          <div class="calendar-label-picker">
+            <div class="muted">Labels (optional, multi-select):</div>
+            <div class="calendar-label-list">
+              <% labels.forEach(lb => { %>
+                <label class="calendar-label-option">
+                  <input type="checkbox" name="label_ids" value="<%= lb.id %>" />
+                  <span class="calendar-label-chip" style="--label-color:<%= lb.color %>"><%= lb.name %></span>
+                </label>
+              <% }) %>
+            </div>
+          </div>
+
+          <div class="calendar-label-picker">
+            <label>Tag Users Scope
+              <select name="tag_scope" class="tag-scope-select">
+                <option value="">None</option>
+                <option value="all">ALL</option>
+                <option value="all_teachers">All teachers</option>
+                <option value="teachers">Teachers</option>
+                <option value="all_staffs">All Staffs</option>
+                <option value="staffs">Staffs</option>
+              </select>
+            </label>
+            <div class="tag-user-group tag-teacher-wrap">
+              <div class="muted">Teachers (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% teacherUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_teacher_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_teacher_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+            <div class="tag-user-group tag-staff-wrap">
+              <div class="muted">Staffs (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% staffUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_staff_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_staff_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button type="submit" class="btn">Save Changes</button>
+            <button type="button" class="btn secondary" id="calendarEventCancelEdit">Cancel Edit</button>
+          </div>
+        </form>
+
+        <div class="button-row" id="calendarEventModalActions">
+          <button type="button" class="btn secondary" id="calendarEventEditBtn">Edit Event</button>
+          <button type="button" class="btn" id="calendarEventCloseBtn">Close</button>
+        </div>
       </div>
-    </form>
+    </div>
+
+    <section class="card form calendar-add-form">
+      <h3>Add Event</h3>
+      <form method="post" action="/teacher/calendar/add">
+        <div class="inline-filters">
+          <label>Title
+            <input type="text" name="title" required />
+          </label>
+          <label>Details
+            <input type="text" name="details" />
+          </label>
+          <label>Start Date
+            <input type="date" name="event_date" required />
+          </label>
+          <label>End Date
+            <input type="date" name="end_date" />
+          </label>
+        </div>
+
+        <div class="calendar-label-picker">
+          <div class="muted">Labels (optional, multi-select):</div>
+          <div class="calendar-label-list">
+            <% labels.forEach(lb => { %>
+              <label class="calendar-label-option">
+                <input type="checkbox" name="label_ids" value="<%= lb.id %>" />
+                <span class="calendar-label-chip" style="--label-color:<%= lb.color %>"><%= lb.name %></span>
+              </label>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="calendar-label-picker">
+          <label>Tag Users Scope
+            <select name="tag_scope" class="tag-scope-select">
+              <option value="">None</option>
+              <option value="all">ALL</option>
+              <option value="all_teachers">All teachers</option>
+              <option value="teachers">Teachers</option>
+              <option value="all_staffs">All Staffs</option>
+              <option value="staffs">Staffs</option>
+            </select>
+          </label>
+          <div class="tag-user-group tag-teacher-wrap">
+              <div class="muted">Teachers (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% teacherUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_teacher_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_teacher_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+            <div class="tag-user-group tag-staff-wrap">
+              <div class="muted">Staffs (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% staffUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_staff_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_staff_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+        </div>
+
+        <button class="btn" type="submit">Add Event</button>
+      </form>
+    </section>
+
+    <section class="card form calendar-add-form">
+      <h3>Create New Label</h3>
+      <form method="post" action="/teacher/calendar/labels/add" class="inline-filters">
+        <input type="hidden" name="redirect_month" value="<%= monthKey %>" />
+        <label>Name
+          <input type="text" name="label_name" required />
+        </label>
+        <label>Color
+          <input type="color" name="label_color" value="#3f6fae" />
+        </label>
+        <label>Description
+          <input type="text" name="label_description" />
+        </label>
+        <button class="btn" type="submit">Create Label</button>
+      </form>
+    </section>
 
     <h3>Active Events</h3>
     <table>
@@ -80,6 +244,8 @@
           <th>End</th>
           <th>Title</th>
           <th>Details</th>
+          <th>Labels</th>
+          <th>Tagged Users</th>
           <th>Created By</th>
           <th>Created At</th>
           <th>Action</th>
@@ -91,13 +257,89 @@
             <td><%= ev.event_date %></td>
             <td><%= ev.end_date %></td>
             <td><%= ev.title %></td>
-            <td><%= ev.details %></td>
-            <td><%= ev.creator_name %></td>
-            <td><%= ev.created_at %></td>
+            <td><%= ev.details || '-' %></td>
             <td>
-              <form method="post" action="/teacher/calendar/delete/<%= ev.id %>">
-                <button type="submit" class="btn danger">Delete</button>
-              </form>
+              <% if (ev.labels && ev.labels.length) { %>
+                <div class="calendar-inline-labels">
+                  <% ev.labels.forEach(lb => { %>
+                    <span class="calendar-label-chip" style="--label-color:<%= lb.color %>" title="<%= lb.description || '' %>"><%= lb.name %></span>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <span class="muted">No labels</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (ev.tagged_users && ev.tagged_users.length) { %>
+                <%= ev.tagged_users.map(u => u.display_name).join(', ') %>
+              <% } else { %>
+                <span class="muted">None</span>
+              <% } %>
+            </td>
+            <td><%= ev.creator_name || 'System' %></td>
+            <td><%= ev.created_at || '-' %></td>
+            <td>
+              <% if (ev.canEdit) { %>
+                <details>
+                  <summary class="btn subtle">Edit</summary>
+                  <form method="post" action="/teacher/calendar/update/<%= ev.id %>" class="form" style="margin-top:8px; min-width:260px;">
+                    <label>Title<input type="text" name="title" value="<%= ev.title %>" required /></label>
+                    <label>Details<input type="text" name="details" value="<%= ev.details || '' %>" /></label>
+                    <label>Start Date<input type="date" name="event_date" value="<%= ev.event_date %>" required /></label>
+                    <label>End Date<input type="date" name="end_date" value="<%= ev.end_date %>" /></label>
+
+                    <div class="calendar-label-picker">
+                      <div class="calendar-label-list">
+                        <% labels.forEach(lb => { %>
+                          <label class="calendar-label-option">
+                            <input type="checkbox" name="label_ids" value="<%= lb.id %>" <%= (ev.labels || []).some(x => Number(x.id) === Number(lb.id)) ? 'checked' : '' %> />
+                            <span class="calendar-label-chip" style="--label-color:<%= lb.color %>"><%= lb.name %></span>
+                          </label>
+                        <% }) %>
+                      </div>
+                    </div>
+
+                    <div class="calendar-label-picker">
+                      <label>Tag Users Scope
+                        <select name="tag_scope" class="tag-scope-select">
+                          <option value="" <%= !ev.tag_scope ? 'selected' : '' %>>None</option>
+                          <option value="all" <%= ev.tag_scope === 'all' ? 'selected' : '' %>>ALL</option>
+                          <option value="all_teachers" <%= ev.tag_scope === 'all_teachers' ? 'selected' : '' %>>All teachers</option>
+                          <option value="teachers" <%= ev.tag_scope === 'teachers' ? 'selected' : '' %>>Teachers</option>
+                          <option value="all_staffs" <%= ev.tag_scope === 'all_staffs' ? 'selected' : '' %>>All Staffs</option>
+                          <option value="staffs" <%= ev.tag_scope === 'staffs' ? 'selected' : '' %>>Staffs</option>
+                        </select>
+                      </label>
+                      <div class="tag-user-group tag-teacher-wrap">
+              <div class="muted">Teachers (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% teacherUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_teacher_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_teacher_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+            <div class="tag-user-group tag-staff-wrap">
+              <div class="muted">Staffs (select one or more)</div>
+              <div class="tag-checkbox-grid">
+                <% staffUsers.forEach(u => { %>
+                  <label class="tag-check-item">
+                    <input type="checkbox" name="tag_staff_ids" value="<%= u.id %>" <%= (typeof ev !== 'undefined' && (ev.tagged_staff_ids || []).includes(Number(u.id))) ? 'checked' : '' %> />
+                    <span><%= u.display_name %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+                    </div>
+
+                    <button type="submit" class="btn">Save</button>
+                  </form>
+                </details>
+              <% } else { %>
+                <span class="muted">System event</span>
+              <% } %>
             </td>
           </tr>
         <% }) %>
@@ -131,6 +373,159 @@
       </tbody>
     </table>
   </main>
+
+    <script>
+    (function () {
+      function updateSelectVisibility(container) {
+        var scope = container.querySelector('.tag-scope-select');
+        if (!scope) return;
+        var teacherWrap = container.querySelector('.tag-teacher-wrap');
+        var staffWrap = container.querySelector('.tag-staff-wrap');
+        if (!teacherWrap || !staffWrap) return;
+
+        var mode = String(scope.value || '').toLowerCase();
+        var showTeachers = mode === 'teachers';
+        var showStaffs = mode === 'staffs';
+
+        teacherWrap.style.display = showTeachers ? '' : 'none';
+        staffWrap.style.display = showStaffs ? '' : 'none';
+      }
+
+      document.querySelectorAll('form').forEach(function (form) {
+        if (!form.querySelector('.tag-scope-select')) return;
+        updateSelectVisibility(form);
+        form.querySelector('.tag-scope-select').addEventListener('change', function () {
+          updateSelectVisibility(form);
+        });
+      });
+
+      var events = <%- JSON.stringify(allEvents).replace(/</g, '\\u003c') %>;
+      var eventMap = new Map((events || []).map(function (e) { return [String(e.id), e]; }));
+      var modal = document.getElementById('calendarEventModal');
+      var titleEl = document.getElementById('calendarEventTitle');
+      var dateEl = document.getElementById('calendarEventDate');
+      var creatorEl = document.getElementById('calendarEventCreator');
+      var detailsEl = document.getElementById('calendarEventDetails');
+      var labelsEl = document.getElementById('calendarEventLabels');
+      var taggedUsersEl = document.getElementById('calendarEventTaggedUsers');
+      var editBtn = document.getElementById('calendarEventEditBtn');
+      var closeBtn = document.getElementById('calendarEventCloseBtn');
+      var closeXBtn = document.getElementById('calendarEventCloseX');
+      var actions = document.getElementById('calendarEventModalActions');
+      var editForm = document.getElementById('calendarEventEditForm');
+      var cancelEditBtn = document.getElementById('calendarEventCancelEdit');
+      var activeEvent = null;
+
+      function hideModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        activeEvent = null;
+      }
+
+      function setEditMode(on) {
+        if (!editForm || !actions) return;
+        if (on) {
+          editForm.classList.remove('hidden');
+          actions.classList.add('hidden');
+          updateSelectVisibility(editForm);
+        } else {
+          editForm.classList.add('hidden');
+          actions.classList.remove('hidden');
+        }
+      }
+
+      function fillLabels(labels) {
+        labelsEl.innerHTML = '';
+        if (!labels || !labels.length) {
+          labelsEl.innerHTML = '<span class="muted">No labels</span>';
+          return;
+        }
+        labels.forEach(function (lb) {
+          var chip = document.createElement('span');
+          chip.className = 'calendar-label-chip';
+          chip.style.setProperty('--label-color', lb.color || '#3f6fae');
+          chip.textContent = lb.name || 'Label';
+          labelsEl.appendChild(chip);
+        });
+      }
+
+      function fillEditForm(ev) {
+        if (!editForm) return;
+        editForm.action = '/teacher/calendar/update/' + encodeURIComponent(ev.id);
+        editForm.querySelector('input[name="title"]').value = ev.title || '';
+        editForm.querySelector('input[name="details"]').value = ev.details || '';
+        editForm.querySelector('input[name="event_date"]').value = ev.event_date || '';
+        editForm.querySelector('input[name="end_date"]').value = ev.end_date || '';
+
+        var selectedLabels = new Set((ev.labels || []).map(function (lb) { return Number(lb.id); }));
+        editForm.querySelectorAll('input[name="label_ids"]').forEach(function (cb) {
+          cb.checked = selectedLabels.has(Number(cb.value));
+        });
+
+        var scope = String(ev.tag_scope || '');
+        var scopeSelect = editForm.querySelector('select[name="tag_scope"]');
+        if (scopeSelect) scopeSelect.value = scope;
+
+        var teacherIds = new Set((ev.tagged_teacher_ids || []).map(Number));
+        var staffIds = new Set((ev.tagged_staff_ids || []).map(Number));
+        editForm.querySelectorAll('input[name="tag_teacher_ids"]').forEach(function (cb) {
+          cb.checked = teacherIds.has(Number(cb.value));
+        });
+        editForm.querySelectorAll('input[name="tag_staff_ids"]').forEach(function (cb) {
+          cb.checked = staffIds.has(Number(cb.value));
+        });
+
+        updateSelectVisibility(editForm);
+      }
+
+      function openModalById(eventId) {
+        var ev = eventMap.get(String(eventId));
+        if (!ev || !modal) return;
+        activeEvent = ev;
+        titleEl.textContent = ev.title || 'Event';
+        dateEl.textContent = (ev.event_date === ev.end_date || !ev.end_date) ? (ev.event_date || '-') : (ev.event_date + ' to ' + ev.end_date);
+        creatorEl.textContent = ev.creator_name || 'System';
+        detailsEl.textContent = ev.details || '-';
+        taggedUsersEl.textContent = (ev.tagged_users && ev.tagged_users.length)
+          ? ev.tagged_users.map(function (u) { return u.display_name; }).join(', ')
+          : 'None';
+        fillLabels(ev.labels || []);
+
+        if (ev.canEdit) {
+          editBtn.classList.remove('hidden');
+          fillEditForm(ev);
+        } else {
+          editBtn.classList.add('hidden');
+          setEditMode(false);
+        }
+
+        setEditMode(false);
+        modal.classList.remove('hidden');
+      }
+
+      document.querySelectorAll('.event-span[data-event-id]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          openModalById(el.getAttribute('data-event-id'));
+        });
+      });
+
+      if (editBtn) {
+        editBtn.addEventListener('click', function () {
+          if (!activeEvent || !activeEvent.canEdit) return;
+          setEditMode(true);
+        });
+      }
+      if (cancelEditBtn) cancelEditBtn.addEventListener('click', function () { setEditMode(false); });
+      if (closeBtn) closeBtn.addEventListener('click', hideModal);
+      if (closeXBtn) closeXBtn.addEventListener('click', hideModal);
+      if (modal) {
+        modal.addEventListener('click', function (e) {
+          if (e.target === modal) hideModal();
+        });
+      }
+    })();
+  </script>
   <script src="/js/inactivity.js"></script>
 </body>
 </html>
+

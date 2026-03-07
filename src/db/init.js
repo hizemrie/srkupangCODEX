@@ -1,4 +1,4 @@
-﻿const bcrypt = require("bcryptjs");
+const bcrypt = require("bcryptjs");
 const dayjs = require("dayjs");
 const db = require("./database");
 
@@ -12,8 +12,10 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       display_name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK (role IN ('admin','teacher')),
+      role TEXT NOT NULL CHECK (role IN ('admin','teacher','staff')),
+      user_type TEXT NOT NULL DEFAULT 'teacher',
       password_hash TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     );
 
@@ -25,12 +27,18 @@ function createTables() {
     CREATE TABLE IF NOT EXISTS students (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id TEXT,
+      family_id TEXT,
       no_sb TEXT,
       student_code TEXT,
       full_name TEXT NOT NULL,
       nickname TEXT NOT NULL,
       dob TEXT NOT NULL,
+      gender TEXT,
+      address TEXT,
+      student_status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
       photo_url TEXT,
+      photo_path TEXT,
       emergency_contact TEXT NOT NULL,
       siblings_json TEXT,
       class_id INTEGER NOT NULL,
@@ -86,6 +94,7 @@ function createTables() {
       details TEXT,
       event_date TEXT NOT NULL,
       end_date TEXT,
+      event_source TEXT NOT NULL DEFAULT 'manual',
       created_by INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       deleted_by INTEGER,
@@ -94,17 +103,74 @@ function createTables() {
       FOREIGN KEY (created_by) REFERENCES users(id),
       FOREIGN KEY (deleted_by) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS calendar_labels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      color TEXT NOT NULL,
+      description TEXT,
+      created_by INTEGER,
+      is_system INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS calendar_event_labels (
+      event_id INTEGER NOT NULL,
+      label_id INTEGER NOT NULL,
+      PRIMARY KEY (event_id, label_id),
+      FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE,
+      FOREIGN KEY (label_id) REFERENCES calendar_labels(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS calendar_event_users (
+      event_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      PRIMARY KEY (event_id, user_id),
+      FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 }
+function migrateUsersTable() {
+  const cols = getColumns("users");
 
+  if (!cols.includes("is_active")) {
+    db.exec("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!cols.includes("user_type")) {
+    db.exec("ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'teacher'");
+  }
+
+  db.exec("UPDATE users SET is_active = 1 WHERE is_active IS NULL");
+  db.exec("UPDATE users SET user_type = CASE WHEN role = 'admin' THEN 'admin' WHEN role = 'staff' THEN 'staff' ELSE 'teacher' END WHERE user_type IS NULL OR TRIM(user_type) = ''");
+}
 function migrateStudentsTable() {
   const cols = getColumns("students");
 
   if (!cols.includes("student_id")) {
     db.exec("ALTER TABLE students ADD COLUMN student_id TEXT");
   }
+  if (!cols.includes("family_id")) {
+    db.exec("ALTER TABLE students ADD COLUMN family_id TEXT");
+  }
   if (!cols.includes("no_sb")) {
     db.exec("ALTER TABLE students ADD COLUMN no_sb TEXT");
+  }
+  if (!cols.includes("gender")) {
+    db.exec("ALTER TABLE students ADD COLUMN gender TEXT");
+  }
+  if (!cols.includes("address")) {
+    db.exec("ALTER TABLE students ADD COLUMN address TEXT");
+  }
+  if (!cols.includes("student_status")) {
+    db.exec("ALTER TABLE students ADD COLUMN student_status TEXT");
+  }
+  if (!cols.includes("notes")) {
+    db.exec("ALTER TABLE students ADD COLUMN notes TEXT");
+  }
+  if (!cols.includes("photo_path")) {
+    db.exec("ALTER TABLE students ADD COLUMN photo_path TEXT");
   }
 
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_id ON students(student_id)");
@@ -126,6 +192,8 @@ function migrateStudentsTable() {
   for (const row of noSbMissing) {
     setNoSb.run(`NSB${String(row.id).padStart(4, "0")}`, row.id);
   }
+
+  db.exec("UPDATE students SET student_status = 'active' WHERE student_status IS NULL OR TRIM(student_status) = ''");
 }
 
 function migrateCalendarEventsTable() {
@@ -133,7 +201,36 @@ function migrateCalendarEventsTable() {
   if (!cols.includes("end_date")) {
     db.exec("ALTER TABLE calendar_events ADD COLUMN end_date TEXT");
   }
+  if (!cols.includes("event_source")) {
+    db.exec("ALTER TABLE calendar_events ADD COLUMN event_source TEXT");
+  }
+  db.exec("UPDATE calendar_events SET event_source = 'manual' WHERE event_source IS NULL OR TRIM(event_source) = ''");
   db.exec("UPDATE calendar_events SET end_date = event_date WHERE end_date IS NULL OR TRIM(end_date) = ''");
+}
+
+function seedCalendarLabels() {
+  const now = dayjs().toISOString();
+  const defaults = [
+    { name: "Public Holiday", color: "#e74c3c", description: "National/public holiday" },
+    { name: "Cuti Penggal", color: "#f39c12", description: "School term break" },
+    { name: "Birthday", color: "#f1c40f", description: "Student birthday" },
+    { name: "PD", color: "#2ecc71", description: "Professional development" },
+    { name: "Meeting", color: "#3498db", description: "Meeting" },
+    { name: "Taklimat", color: "#9b59b6", description: "Briefing / Taklimat" },
+    { name: "School Event", color: "#1abc9c", description: "School event" },
+    { name: "Assessment", color: "#e67e22", description: "Assessment" },
+    { name: "Dateline", color: "#e84393", description: "Deadline / dateline" }
+  ];
+
+  const insert = db.prepare(
+    `INSERT INTO calendar_labels (name, color, description, created_by, is_system, created_at)
+     VALUES (?, ?, ?, NULL, 1, ?)
+     ON CONFLICT(name) DO UPDATE SET color = excluded.color, description = excluded.description`
+  );
+
+  for (const label of defaults) {
+    insert.run(label.name, label.color, label.description, now);
+  }
 }
 
 function migrateSiblingsToRelation() {
@@ -220,11 +317,11 @@ function seedDefaults() {
   const hasUsers = db.prepare("SELECT COUNT(*) as count FROM users").get().count > 0;
   if (!hasUsers) {
     const insertUser = db.prepare(
-      "INSERT INTO users (username, display_name, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO users (username, display_name, role, user_type, password_hash, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
 
-    insertUser.run("admin", "School Admin", "admin", bcrypt.hashSync("117911Zam", 10), now);
-    insertUser.run("hizemrie", "hizemrie", "teacher", bcrypt.hashSync("eirmezih", 10), now);
+    insertUser.run("admin", "School Admin", "admin", "admin", bcrypt.hashSync("117911Zam", 10), 1, now);
+    insertUser.run("hizemrie", "hizemrie", "teacher", "teacher", bcrypt.hashSync("eirmezih", 10), 1, now);
   }
 
   const classNames = ["PRA", "YEAR 1", "YEAR 2", "YEAR 3", "YEAR 4", "YEAR 5", "YEAR 6"];
@@ -241,13 +338,14 @@ function seedDefaults() {
     });
   }
 
+  const shouldSeedMockStudents = process.env.SEED_MOCK_STUDENTS === "1";
   const hasStudents = db.prepare("SELECT COUNT(*) as count FROM students").get().count > 0;
-  if (!hasStudents) {
+  if (shouldSeedMockStudents && !hasStudents) {
     const classes = db.prepare("SELECT id, name FROM classes ORDER BY id").all();
     const insertStudent = db.prepare(
       `INSERT INTO students
-       (student_id, no_sb, student_code, full_name, nickname, dob, photo_url, emergency_contact, siblings_json, class_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (student_id, family_id, no_sb, student_code, full_name, nickname, dob, gender, address, student_status, notes, photo_url, photo_path, emergency_contact, siblings_json, class_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     const first = ["Aiman", "Siti", "Nur", "Amir", "Haziq", "Nadia", "Faris", "Izzah", "Danish", "Alya"];
@@ -263,12 +361,18 @@ function seedDefaults() {
         const dob = dayjs("2017-01-01").add(counter % 1500, "day").format("YYYY-MM-DD");
         insertStudent.run(
           externalStudentId,
+          `FAM${String(Math.ceil(counter / 2)).padStart(3, "0")}`,
           noSb,
           externalStudentId,
           fullName,
           nickname,
           dob,
+          counter % 2 === 0 ? "Male" : "Female",
+          `Kg. Mock ${((counter - 1) % 7) + 1}, Tutong`,
+          "active",
+          "",
           `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(nickname)}`,
+          null,
           `+673-8${String(100000 + counter).slice(-6)}`,
           "[]",
           c.id,
@@ -279,8 +383,9 @@ function seedDefaults() {
     }
   }
 
+  const shouldSeedMockEvents = process.env.SEED_MOCK_EVENTS === "1";
   const hasEvents = db.prepare("SELECT COUNT(*) as count FROM calendar_events").get().count > 0;
-  if (!hasEvents) {
+  if (shouldSeedMockEvents && !hasEvents) {
     const teacher = db.prepare("SELECT id FROM users WHERE username = ?").get("hizemrie");
     const insertEvent = db.prepare(
       `INSERT INTO calendar_events
@@ -323,11 +428,13 @@ function updateDailySnapshot(studentId) {
 
 function initializeDatabase() {
   createTables();
+  migrateUsersTable();
   migrateStudentsTable();
   migrateCalendarEventsTable();
   migrateClassNames();
   migrateSiblingsToRelation();
   seedDefaults();
+  seedCalendarLabels();
 }
 
 module.exports = {
@@ -335,6 +442,24 @@ module.exports = {
   initializeDatabase,
   updateDailySnapshot
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

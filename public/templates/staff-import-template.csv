@@ -1,0 +1,4 @@
+user_id,full_name,password,role,user_type,is_active
+support01,Nur Aisyah,TempPass123,teacher,staff,true
+teacher01,Md Ali,TempPass456,teacher,teacher,true
+admin01,Siti Rahmah,AdminPass789,admin,admin,true

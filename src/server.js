@@ -1,4 +1,4 @@
-﻿const path = require("path");
+const path = require("path");
 const express = require("express");
 const session = require("express-session");
 const dayjs = require("dayjs");
@@ -8,6 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 const publicRoutes = require("./routes/publicRoutes");
 const teacherRoutes = require("./routes/teacherRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const apiCalendarRoutes = require("./routes/apiCalendarRoutes");
 
 initializeDatabase();
 
@@ -58,6 +59,7 @@ app.use(authRoutes);
 app.use(publicRoutes);
 app.use("/teacher", teacherRoutes);
 app.use("/admin", adminRoutes);
+app.use("/api/calendar", apiCalendarRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -67,3 +69,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
+
+

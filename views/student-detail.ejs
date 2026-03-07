@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -9,12 +9,26 @@
 <body>
   <%- include('partials/teacher-nav') %>
   <main class="container">
+    <section class="card">
+      <h3>Quick Class Switch</h3>
+      <div class="button-row">
+        <% classes.forEach(c => { %>
+          <a class="btn <%= Number(student.class_id) === Number(c.id) ? '' : 'secondary' %>" href="/teacher/students/class/<%= c.id %>"><%= c.name %></a>
+        <% }) %>
+      </div>
+    </section>
+
     <div class="card student-detail">
-      <img src="<%= student.photo_url %>" alt="Student photo" class="avatar" />
+      <img src="<%= student.photo_path || student.photo_url || 'https://api.dicebear.com/7.x/adventurer/svg?seed=student' %>" alt="Student photo" class="avatar" />
       <h2><%= student.full_name %> (<%= student.nickname %>)</h2>
       <p><strong>Student ID:</strong> <%= student.student_id %></p>
+      <p><strong>FamilyID:</strong> <%= student.family_id || "-" %></p>
       <p><strong>No.SB:</strong> <%= student.no_sb %></p>
       <p><strong>DOB:</strong> <%= student.dob %></p>
+      <p><strong>Gender:</strong> <%= student.gender || "-" %></p>
+      <p><strong>Address:</strong> <%= student.address || "-" %></p>
+      <p><strong>Status:</strong> <%= student.student_status || "active" %></p>
+      <p><strong>Notes:</strong> <%= student.notes || "-" %></p>
       <p><strong>Class:</strong> <%= student.class_name %></p>
       <p><strong>Emergency Contact:</strong> <%= student.emergency_contact %></p>
       <p><strong>Current Accumulated Points:</strong> <%= student.total_points %></p>
@@ -23,7 +37,7 @@
           None
         <% } else { %>
           <% siblings.forEach((s, i) => { %>
-            <%= s.full_name %> [<%= s.student_id %>] (<%= s.class_name %>)<%= i < siblings.length - 1 ? ', ' : '' %>
+            <a href="/teacher/students/code/<%= encodeURIComponent(s.student_id) %>"><%= s.full_name %></a> [<%= s.student_id %>] (<%= s.class_name %>)<%= i < siblings.length - 1 ? ', ' : '' %>
           <% }) %>
         <% } %>
       </p>
