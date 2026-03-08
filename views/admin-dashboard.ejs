@@ -24,6 +24,7 @@
       <form class="form inline-filters" method="post" action="/admin/users/add">
         <input type="text" name="username" placeholder="USER ID" required />
         <input type="text" name="display_name" placeholder="Full name" required />
+        <input type="email" name="email" placeholder="Email (optional)" />
         <input type="password" name="password" placeholder="Password" required />
         <select name="role">
           <option value="admin">admin</option>
@@ -44,13 +45,14 @@
 
       <table>
         <thead>
-          <tr><th>ID</th><th>USER ID</th><th>Name</th><th>Role</th><th>User Type</th><th>Active</th><th>Created</th><th>Edit User</th><th>Reset Password</th><th>Status</th></tr>
+          <tr><th>ID</th><th>USER ID</th><th>Email</th><th>Name</th><th>Role</th><th>User Type</th><th>Active</th><th>Created</th><th>Edit User</th><th>Reset Password</th><th>Status</th></tr>
         </thead>
         <tbody>
           <% staffUsers.forEach(t => { %>
             <tr>
               <td><%= t.id %></td>
               <td><%= t.username %></td>
+              <td><%= t.email || '' %></td>
               <td><%= t.display_name %></td>
               <td><%= t.role %></td>
               <td><%= t.user_type %></td>
@@ -61,6 +63,7 @@
                   <input type="hidden" name="user_id" value="<%= t.id %>" />
                   <input type="text" name="username" value="<%= t.username %>" placeholder="USER ID" required />
                   <input type="text" name="display_name" value="<%= t.display_name %>" placeholder="Full name" required />
+                  <input type="email" name="email" value="<%= t.email || '' %>" placeholder="Email (optional)" />
                   <select name="role">
                     <option value="admin" <%= t.role === 'admin' ? 'selected' : '' %>>admin</option>
                     <option value="teacher" <%= t.role === 'teacher' ? 'selected' : '' %>>teacher</option>
@@ -98,7 +101,7 @@
       </table>
 
       <h3>Import Staff by CSV</h3>
-      <p class="muted">Required fields: user_id, full_name, password. Optional: role, user_type, is_active. Duplicate USER ID rows are skipped for safety.</p>
+      <p class="muted">Required fields: user_id, full_name, password. Optional: role, user_type, is_active, email. Duplicate USER ID rows are skipped for safety.</p>
       <div class="inline-filters" style="margin-bottom:8px;">
         <a class="btn secondary" href="/admin/staff/template">Download CSV Template</a>
       </div>
@@ -110,7 +113,7 @@
         <h4>CSV Preview (first 10 rows)</h4>
         <table>
           <thead>
-            <tr><th>USER ID</th><th>Full Name</th><th>Role</th><th>Active</th></tr>
+            <tr><th>USER ID</th><th>Full Name</th><th>Email</th><th>Role</th><th>Active</th></tr>
           </thead>
           <tbody id="staffImportPreviewBody"></tbody>
         </table>
@@ -653,6 +656,7 @@
             var headers = lines[0].split(',').map(function (h) { return h.trim().toLowerCase(); });
             var idxUserId = headers.indexOf('user_id');
             var idxName = headers.indexOf('full_name');
+            var idxEmail = headers.indexOf('email');
             var idxRole = headers.indexOf('role');
             var idxActive = headers.indexOf('is_active');
 
@@ -663,6 +667,7 @@
               tr.innerHTML =
                 '<td>' + (idxUserId >= 0 ? (cols[idxUserId] || '') : '') + '</td>' +
                 '<td>' + (idxName >= 0 ? (cols[idxName] || '') : '') + '</td>' +
+                '<td>' + (idxEmail >= 0 ? (cols[idxEmail] || '') : '') + '</td>' +
                 '<td>' + (idxRole >= 0 ? (cols[idxRole] || '') : 'teacher') + '</td>' +
                 '<td>' + (idxActive >= 0 ? (cols[idxActive] || '') : 'true') + '</td>';
               staffPreviewBody.appendChild(tr);
@@ -678,12 +683,4 @@
   <script src="/js/inactivity.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
 

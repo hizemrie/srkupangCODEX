@@ -50,7 +50,7 @@ function removeManagedPhotoIfExists(photoPath) {
 }
 
 const BACKUP_TABLES = {
-  users: ["id", "username", "display_name", "role", "user_type", "password_hash", "is_active", "created_at"],
+  users: ["id", "username", "email", "display_name", "role", "user_type", "password_hash", "is_active", "created_at"],
   classes: ["id", "name"],
   students: [
     "id",
@@ -141,7 +141,7 @@ function syncFamilyLinks(studentPk, familyId, now, linkSibling, findByFamily) {
 router.get("/dashboard", (req, res) => {
   const staffUsers = db
     .prepare(
-      `SELECT id, username, display_name, role,
+      `SELECT id, username, email, display_name, role,
               COALESCE(user_type, CASE WHEN role = 'admin' THEN 'admin' WHEN role = 'staff' THEN 'staff' ELSE 'teacher' END) AS user_type,
               COALESCE(is_active, 1) AS is_active,
               created_at
@@ -226,9 +226,19 @@ function parseRoleAndType(roleRaw, userTypeRaw) {
   return { role, userType };
 }
 
+function normalizeEmail(value) {
+  const trimmed = String(value || "").trim().toLowerCase();
+  return trimmed || null;
+}
+
+function isValidEmail(value) {
+  if (!value) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value));
+}
 function addUserHandler(req, res) {
   const username = (req.body.username || "").trim();
   const displayName = (req.body.display_name || "").trim();
+  const email = normalizeEmail(req.body.email);
   const password = req.body.password || "";
   const { role, userType } = parseRoleAndType(req.body.role, req.body.user_type);
   const isActive = String(req.body.is_active || "1") === "1" ? 1 : 0;
@@ -236,14 +246,21 @@ function addUserHandler(req, res) {
   if (!username || !displayName || !password) {
     return res.status(400).send("user_id, display name and password required");
   }
+  if (!isValidEmail(email)) {
+    return res.redirect("/admin/dashboard?error=Invalid+email+format");
+  }
   if (db.prepare("SELECT id FROM users WHERE username = ?").get(username)) {
     return res.redirect("/admin/dashboard?error=USER+ID+already+exists");
   }
+  if (email) {
+    const emailDup = db.prepare("SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))").get(email);
+    if (emailDup) return res.redirect("/admin/dashboard?error=Email+already+exists");
+  }
 
   db.prepare(
-    `INSERT INTO users (username, display_name, role, user_type, password_hash, is_active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(username, displayName, role, userType, bcrypt.hashSync(password, 10), isActive, dayjs().toISOString());
+    `INSERT INTO users (username, email, display_name, role, user_type, password_hash, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(username, email, displayName, role, userType, bcrypt.hashSync(password, 10), isActive, dayjs().toISOString());
 
   return res.redirect("/admin/dashboard?success=User+account+added");
 }
@@ -278,6 +295,7 @@ router.post("/users/update", (req, res) => {
   const userId = Number(req.body.user_id || 0);
   const username = String(req.body.username || "").trim();
   const displayName = String(req.body.display_name || "").trim();
+  const email = normalizeEmail(req.body.email);
   const { role, userType } = parseRoleAndType(req.body.role, req.body.user_type);
   const isActive = String(req.body.is_active || "1") === "1" ? 1 : 0;
 
@@ -287,8 +305,16 @@ router.post("/users/update", (req, res) => {
 
   const existing = db.prepare("SELECT id FROM users WHERE id = ?").get(userId);
   if (!existing) return res.redirect("/admin/dashboard?error=User+not+found");
+  if (!isValidEmail(email)) {
+    return res.redirect("/admin/dashboard?error=Invalid+email+format");
+  }
+
   const duplicate = db.prepare("SELECT id FROM users WHERE username = ? AND id <> ?").get(username, userId);
   if (duplicate) return res.redirect("/admin/dashboard?error=USER+ID+already+used+by+another+account");
+  if (email) {
+    const emailDup = db.prepare("SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) AND id <> ?").get(email, userId);
+    if (emailDup) return res.redirect("/admin/dashboard?error=Email+already+used+by+another+account");
+  }
 
   const sessionUserId = Number((req.session.user || {}).id || 0);
   if (userId === sessionUserId && role !== "admin") {
@@ -300,9 +326,9 @@ router.post("/users/update", (req, res) => {
 
   db.prepare(
     `UPDATE users
-     SET username = ?, display_name = ?, role = ?, user_type = ?, is_active = ?
+     SET username = ?, email = ?, display_name = ?, role = ?, user_type = ?, is_active = ?
      WHERE id = ?`
-  ).run(username, displayName, role, userType, isActive, userId);
+  ).run(username, email, displayName, role, userType, isActive, userId);
 
   return res.redirect("/admin/dashboard?success=User+account+updated");
 });
@@ -318,9 +344,10 @@ router.post("/staff/import", uploadMemory.single("staff_csv"), (req, res) => {
   }
 
   const findExisting = db.prepare("SELECT id FROM users WHERE username = ?");
+  const findExistingEmail = db.prepare("SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))");
   const insertUser = db.prepare(
-    `INSERT INTO users (username, display_name, role, user_type, password_hash, is_active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO users (username, email, display_name, role, user_type, password_hash, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const summary = { inserted: 0, skipped: 0, failed: 0, errors: [] };
@@ -333,6 +360,7 @@ router.post("/staff/import", uploadMemory.single("staff_csv"), (req, res) => {
 
       const userId = String(row.user_id || row.username || "").trim();
       const fullName = String(row.full_name || row.display_name || "").trim();
+      const email = normalizeEmail(row.email);
       const password = String(row.password || "");
       const roleRaw = String(row.role || "teacher").trim().toLowerCase();
       const role = ["admin", "teacher", "staff"].includes(roleRaw) ? roleRaw : "teacher";
@@ -349,14 +377,24 @@ router.post("/staff/import", uploadMemory.single("staff_csv"), (req, res) => {
         continue;
       }
 
+      if (!isValidEmail(email)) {
+        summary.failed += 1;
+        summary.errors.push(`Row ${rowNum}: invalid email format`);
+        continue;
+      }
+
       if (findExisting.get(userId)) {
         summary.skipped += 1;
         summary.errors.push(`Row ${rowNum}: duplicate USER ID (${userId}) skipped`);
         continue;
       }
-
+      if (email && findExistingEmail.get(email)) {
+        summary.skipped += 1;
+        summary.errors.push(`Row ${rowNum}: duplicate email (${email}) skipped`);
+        continue;
+      }
       try {
-        insertUser.run(userId, fullName, role, userType, bcrypt.hashSync(password, 10), isActiveFlag, now);
+        insertUser.run(userId, email, fullName, role, userType, bcrypt.hashSync(password, 10), isActiveFlag, now);
         summary.inserted += 1;
       } catch (err) {
         summary.failed += 1;
@@ -904,25 +942,4 @@ router.use((err, req, res, next) => {
   return next(err);
 });
 module.exports = router;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

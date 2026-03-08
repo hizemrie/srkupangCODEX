@@ -142,9 +142,40 @@ function migrateUsersTable() {
   if (!cols.includes("user_type")) {
     db.exec("ALTER TABLE users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'teacher'");
   }
+  if (!cols.includes("email")) {
+    db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+  }
 
   db.exec("UPDATE users SET is_active = 1 WHERE is_active IS NULL");
   db.exec("UPDATE users SET user_type = CASE WHEN role = 'admin' THEN 'admin' WHEN role = 'staff' THEN 'staff' ELSE 'teacher' END WHERE user_type IS NULL OR TRIM(user_type) = ''");
+  db.exec("UPDATE users SET email = NULL WHERE email IS NOT NULL AND TRIM(email) = ''");
+
+  const duplicates = db
+    .prepare(
+      `SELECT LOWER(TRIM(email)) AS email_norm
+       FROM users
+       WHERE email IS NOT NULL AND TRIM(email) <> ''
+       GROUP BY LOWER(TRIM(email))
+       HAVING COUNT(*) > 1`
+    )
+    .all();
+
+  for (const d of duplicates) {
+    const rows = db
+      .prepare(
+        `SELECT id
+         FROM users
+         WHERE LOWER(TRIM(email)) = ?
+         ORDER BY id ASC`
+      )
+      .all(d.email_norm);
+
+    rows.slice(1).forEach((r) => {
+      db.prepare("UPDATE users SET email = NULL WHERE id = ?").run(r.id);
+    });
+  }
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL AND TRIM(email) <> ''");
 }
 function migrateStudentsTable() {
   const cols = getColumns("students");

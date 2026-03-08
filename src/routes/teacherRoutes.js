@@ -64,7 +64,7 @@ function parseTaggedUsersRaw(raw) {
 function listStaffUsers() {
   return db
     .prepare(
-      `SELECT id, username AS user_id, display_name, CASE WHEN role = 'teacher' AND COALESCE(user_type, 'teacher') = 'staff' THEN 'staff' ELSE role END AS role
+      `SELECT id, username AS user_id, email, display_name, CASE WHEN role = 'teacher' AND COALESCE(user_type, 'teacher') = 'staff' THEN 'staff' ELSE role END AS role
        FROM users
        WHERE (role = 'teacher' OR role = 'staff') AND COALESCE(is_active, 1) = 1
        ORDER BY display_name ASC, username ASC`
