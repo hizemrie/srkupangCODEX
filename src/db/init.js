@@ -59,6 +59,7 @@ function createTables() {
     CREATE TABLE IF NOT EXISTS point_reasons (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       reason TEXT UNIQUE NOT NULL,
+      reason_type TEXT NOT NULL DEFAULT 'positive' CHECK (reason_type IN ('positive','negative')),
       created_by INTEGER,
       is_custom INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
@@ -208,6 +209,46 @@ function migrateCalendarEventsTable() {
   db.exec("UPDATE calendar_events SET end_date = event_date WHERE end_date IS NULL OR TRIM(end_date) = ''");
 }
 
+function migratePointReasonsTable() {
+  const cols = getColumns("point_reasons");
+  if (!cols.includes("reason_type")) {
+    db.exec("ALTER TABLE point_reasons ADD COLUMN reason_type TEXT NOT NULL DEFAULT 'positive'");
+  }
+
+  db.exec("UPDATE point_reasons SET reason_type = 'positive' WHERE reason_type IS NULL OR TRIM(reason_type) = ''");
+
+  db.exec(`
+    UPDATE point_reasons
+    SET reason_type = CASE
+      WHEN LOWER(reason) LIKE '%late%' OR LOWER(reason) LIKE '%disruption%' OR LOWER(reason) LIKE '%misconduct%' OR LOWER(reason) LIKE '%bad%'
+      THEN 'negative'
+      ELSE reason_type
+    END
+  `);
+
+  db.exec(`
+    UPDATE point_reasons
+    SET reason_type = CASE
+      WHEN EXISTS (
+        SELECT 1 FROM point_logs pl
+        WHERE pl.reason = point_reasons.reason AND pl.points < 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM point_logs pl2
+        WHERE pl2.reason = point_reasons.reason AND pl2.points > 0
+      )
+      THEN 'negative'
+      WHEN EXISTS (
+        SELECT 1 FROM point_logs pl3
+        WHERE pl3.reason = point_reasons.reason AND pl3.points > 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM point_logs pl4
+        WHERE pl4.reason = point_reasons.reason AND pl4.points < 0
+      )
+      THEN 'positive'
+      ELSE reason_type
+    END
+  `);
+}
 function seedCalendarLabels() {
   const now = dayjs().toISOString();
   const defaults = [
@@ -331,13 +372,18 @@ function seedDefaults() {
   const hasReasons = db.prepare("SELECT COUNT(*) as count FROM point_reasons").get().count > 0;
   if (!hasReasons) {
     const insertReason = db.prepare(
-      "INSERT INTO point_reasons (reason, created_by, is_custom, created_at) VALUES (?, NULL, 0, ?)"
+      "INSERT INTO point_reasons (reason, reason_type, created_by, is_custom, created_at) VALUES (?, ?, NULL, 0, ?)"
     );
-    ["Homework completed", "Good behavior", "Helped classmate", "Late submission", "Class disruption"].forEach((reason) => {
-      insertReason.run(reason, now);
+    [
+      { reason: "Homework completed", type: "positive" },
+      { reason: "Good behavior", type: "positive" },
+      { reason: "Helped classmate", type: "positive" },
+      { reason: "Late submission", type: "negative" },
+      { reason: "Class disruption", type: "negative" }
+    ].forEach((item) => {
+      insertReason.run(item.reason, item.type, now);
     });
   }
-
   const shouldSeedMockStudents = process.env.SEED_MOCK_STUDENTS === "1";
   const hasStudents = db.prepare("SELECT COUNT(*) as count FROM students").get().count > 0;
   if (shouldSeedMockStudents && !hasStudents) {
@@ -431,6 +477,7 @@ function initializeDatabase() {
   migrateUsersTable();
   migrateStudentsTable();
   migrateCalendarEventsTable();
+  migratePointReasonsTable();
   migrateClassNames();
   migrateSiblingsToRelation();
   seedDefaults();

@@ -73,7 +73,7 @@ const BACKUP_TABLES = {
     "created_at"
   ],
   student_siblings: ["id", "student_pk", "sibling_student_pk", "created_at"],
-  point_reasons: ["id", "reason", "created_by", "is_custom", "created_at"],
+  point_reasons: ["id", "reason", "reason_type", "created_by", "is_custom", "created_at"],
   point_logs: ["id", "student_id", "class_id", "points", "reason", "awarded_by", "awarded_at"],
   daily_points: ["id", "snapshot_date", "student_id", "total_points", "last_updated_at"],
   calendar_events: ["id", "title", "details", "event_date", "end_date", "event_source", "created_by", "created_at", "deleted_by", "deleted_at", "is_deleted"],
@@ -117,6 +117,7 @@ function insertRows(table, columns, rows) {
       ...columns.map((c) => {
         if (Object.prototype.hasOwnProperty.call(row, c)) return row[c];
         if (table === "calendar_events" && c === "event_source") return "manual";
+        if (table === "point_reasons" && c === "reason_type") return "positive";
         if (table === "users" && c === "is_active") return 1;
         if (table === "users" && c === "user_type") return row.role === "admin" ? "admin" : "teacher";
         return null;
@@ -757,6 +758,139 @@ router.post("/events/purge/:eventId", (req, res) => {
   return res.redirect("/admin/dashboard?success=Deleted+event+removed+permanently");
 });
 
+function isValidIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function buildInClause(values) {
+  const placeholders = values.map(() => "?").join(", ");
+  return `(${placeholders})`;
+}
+
+router.post("/points/reset", (req, res) => {
+  try {
+    const selectedClassId = Number(req.body.class_id || 0);
+    const includeAllStudents = String(req.body.scope_all_students || "") === "1";
+    const includeWholeClassRaw = String(req.body.scope_whole_class || "") === "1";
+    const includeSelectedStudentsRaw = String(req.body.scope_selected_students || "") === "1";
+    const includeWholeClass = !includeAllStudents && includeWholeClassRaw;
+    const includeSelectedStudents = !includeAllStudents && includeSelectedStudentsRaw;
+    const selectedStudentsRaw = req.body.selected_students;
+    const includeAllTime = String(req.body.filter_all_time || "") === "1";
+    const includeSpecificDate = String(req.body.filter_specific_date || "") === "1";
+    const includeDateRange = String(req.body.filter_date_range || "") === "1";
+    const selectedDate = String(req.body.selected_date || "").trim();
+    let rangeStart = String(req.body.range_start || "").trim();
+    let rangeEnd = String(req.body.range_end || "").trim();
+
+    if (!includeAllStudents && !includeWholeClass && !includeSelectedStudents) {
+      return res.redirect("/admin/dashboard?error=Select+at+least+one+target+scope");
+    }
+    if ((includeWholeClass || includeSelectedStudents) && !selectedClassId) {
+      return res.redirect("/admin/dashboard?error=Class+is+required+for+point+reset");
+    }
+    if (!includeAllTime && !includeSpecificDate && !includeDateRange) {
+      return res.redirect("/admin/dashboard?error=Select+at+least+one+time+filter");
+    }
+
+    const targetStudentIds = new Set();
+    if (includeAllStudents) {
+      const allStudents = db.prepare("SELECT id FROM students").all();
+      allStudents.forEach((s) => targetStudentIds.add(Number(s.id)));
+    }
+    if (includeWholeClass) {
+      const classStudents = db.prepare("SELECT id FROM students WHERE class_id = ?").all(selectedClassId);
+      classStudents.forEach((s) => targetStudentIds.add(Number(s.id)));
+    }
+    if (includeSelectedStudents) {
+      const normalized = Array.isArray(selectedStudentsRaw)
+        ? selectedStudentsRaw
+        : (selectedStudentsRaw ? [selectedStudentsRaw] : []);
+      const isStudentInClass = db.prepare("SELECT id FROM students WHERE id = ? AND class_id = ? LIMIT 1");
+      normalized
+        .map((v) => Number(v))
+        .filter((v) => Number.isInteger(v) && v > 0)
+        .forEach((v) => {
+          if (includeAllStudents || isStudentInClass.get(v, selectedClassId)) {
+            targetStudentIds.add(v);
+          }
+        });
+    }
+
+    const targetIds = Array.from(targetStudentIds);
+    if (!targetIds.length) {
+      return res.redirect("/admin/dashboard?error=No+students+matched+the+selected+scope");
+    }
+
+    const studentWhere = `student_id IN ${buildInClause(targetIds)}`;
+    const timeConditions = [];
+    const timeArgs = [];
+
+    if (includeSpecificDate) {
+      if (!isValidIsoDate(selectedDate)) {
+        return res.redirect("/admin/dashboard?error=Valid+specific+date+is+required+%28YYYY-MM-DD%29");
+      }
+      timeConditions.push("date(awarded_at) = ?");
+      timeArgs.push(selectedDate);
+    }
+    if (includeDateRange) {
+      if (!isValidIsoDate(rangeStart) || !isValidIsoDate(rangeEnd)) {
+        return res.redirect("/admin/dashboard?error=Valid+date+range+is+required+%28YYYY-MM-DD%29");
+      }
+      if (rangeStart > rangeEnd) {
+        const temp = rangeStart;
+        rangeStart = rangeEnd;
+        rangeEnd = temp;
+      }
+      timeConditions.push("date(awarded_at) BETWEEN ? AND ?");
+      timeArgs.push(rangeStart, rangeEnd);
+    }
+
+    const whereSql = includeAllTime
+      ? studentWhere
+      : `${studentWhere} AND (${timeConditions.join(" OR ")})`;
+    const whereArgs = includeAllTime ? [...targetIds] : [...targetIds, ...timeArgs];
+
+    const selectAffectedStudents = db.prepare(`SELECT DISTINCT student_id FROM point_logs WHERE ${whereSql}`);
+    const countTargetLogs = db.prepare(`SELECT COUNT(*) AS total FROM point_logs WHERE ${whereSql}`);
+    const deleteTargetLogs = db.prepare(`DELETE FROM point_logs WHERE ${whereSql}`);
+    const deleteDailyForStudents = db.prepare(`DELETE FROM daily_points WHERE student_id IN ${buildInClause(targetIds)}`);
+    const rebuildDailyForStudents = db.prepare(
+      `INSERT INTO daily_points (snapshot_date, student_id, total_points, last_updated_at)
+       SELECT date(awarded_at) AS snapshot_date, student_id, SUM(points) AS total_points, ? AS last_updated_at
+       FROM point_logs
+       WHERE student_id IN ${buildInClause(targetIds)}
+       GROUP BY date(awarded_at), student_id`
+    );
+
+    const nowIso = dayjs().toISOString();
+    const tx = db.transaction(() => {
+      const beforeCount = Number(countTargetLogs.get(...whereArgs).total || 0);
+      const affectedStudents = selectAffectedStudents.all(...whereArgs).map((r) => Number(r.student_id));
+      deleteTargetLogs.run(...whereArgs);
+      deleteDailyForStudents.run(...targetIds);
+      rebuildDailyForStudents.run(nowIso, ...targetIds);
+      return { beforeCount, affectedStudentCount: affectedStudents.length };
+    });
+
+    const result = tx();
+    const selectedScopes = [
+      includeAllStudents ? "all students" : null,
+      includeWholeClass ? `class ${selectedClassId}` : null,
+      includeSelectedStudents ? "selected students" : null
+    ].filter(Boolean).join(", ");
+    const selectedTime = includeAllTime
+      ? "all time"
+      : [
+          includeSpecificDate ? `date ${selectedDate}` : null,
+          includeDateRange ? `range ${rangeStart} to ${rangeEnd}` : null
+        ].filter(Boolean).join(" OR ");
+    const success = `Points reset complete. Deleted ${result.beforeCount} log entries for ${result.affectedStudentCount} student(s). Scope: ${selectedScopes}. Time: ${selectedTime}.`;
+    return res.redirect(`/admin/dashboard?success=${encodeURIComponent(success)}&class_id=${encodeURIComponent(selectedClassId)}`);
+  } catch (err) {
+    return res.redirect(`/admin/dashboard?error=${encodeURIComponent(`Point reset failed: ${err.message}`)}`);
+  }
+});
 router.use((err, req, res, next) => {
   if (!err) return next();
 

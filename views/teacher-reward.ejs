@@ -9,6 +9,13 @@
 <body>
   <%- include('partials/teacher-nav') %>
   <main class="container reward-container">
+    <% if (error) { %>
+      <section class="card"><div class="error"><%= error %></div></section>
+    <% } %>
+    <% if (success) { %>
+      <section class="card"><div><%= success %></div></section>
+    <% } %>
+
     <section class="card">
       <h3>Quick Class Switch</h3>
       <div class="button-row">
@@ -77,7 +84,7 @@
           <select name="reason" id="modalReason">
             <option value="">Select reason</option>
             <% reasons.forEach(r => { %>
-              <option value="<%= r.reason %>"><%= r.reason %></option>
+              <option value="<%= r.reason %>" data-reason-id="<%= r.id %>" data-is-custom="<%= Number(r.is_custom) === 1 ? '1' : '0' %>" data-reason-type="<%= r.reason_type %>"><%= r.reason %></option>
             <% }) %>
           </select>
         </label>
@@ -91,8 +98,32 @@
           <button class="btn secondary" type="button" id="modalCancel">Cancel</button>
         </div>
       </form>
+
+      <div class="reason-manage-block">
+        <h4>Manage Added Custom Reasons</h4>
+        <form id="reasonManageForm" method="post" action="/teacher/reasons/manage" class="form">
+          <input type="hidden" name="class_id" value="<%= cls.id %>" />
+          <input type="hidden" name="operation" id="manageReasonOperation" value="" />
+          <label>Custom Reasons
+            <select name="reason_id" id="manageReasonId">
+              <option value="">Select custom reason</option>
+              <% customReasons.forEach(r => { %>
+                <option value="<%= r.id %>" data-reason-text="<%= r.reason %>"><%= r.reason %> (<%= r.reason_type %>)</option>
+              <% }) %>
+            </select>
+          </label>
+          <label>Edit text
+            <input type="text" name="new_reason" id="manageNewReason" placeholder="Type updated reason" />
+          </label>
+          <div class="button-row">
+            <button class="btn secondary" type="submit" data-reason-op="edit">Save Edit</button>
+            <button class="btn danger" type="submit" data-reason-op="delete">Delete</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
+
   <div id="photoPreviewModal" class="reward-modal hidden" aria-hidden="true">
     <div class="reward-modal-card reward-photo-modal-card">
       <div class="reward-photo-modal-head">
@@ -102,6 +133,7 @@
       <img id="photoPreviewImage" class="reward-photo-preview" src="" alt="Student photo preview" />
     </div>
   </div>
+
   <script>
     (function () {
       var modal = document.getElementById('awardModal');
@@ -114,10 +146,47 @@
       var reason = document.getElementById('modalReason');
       var customReason = document.getElementById('modalCustomReason');
       var cancelBtn = document.getElementById('modalCancel');
+      var reasonManageForm = document.getElementById('reasonManageForm');
+      var manageReasonId = document.getElementById('manageReasonId');
+      var manageNewReason = document.getElementById('manageNewReason');
+      var manageReasonOperation = document.getElementById('manageReasonOperation');
       var photoPreviewModal = document.getElementById('photoPreviewModal');
       var photoPreviewImage = document.getElementById('photoPreviewImage');
       var photoPreviewName = document.getElementById('photoPreviewName');
       var photoPreviewClose = document.getElementById('photoPreviewClose');
+      function getReasonTypeFromPoints(pointsValue) {
+        var n = Number(pointsValue);
+        if (!Number.isInteger(n) || n === 0) return '';
+        return n > 0 ? 'positive' : 'negative';
+      }
+
+      function refreshReasonOptionsByType(reasonType) {
+        if (!reason) return;
+        var opts = Array.prototype.slice.call(reason.options || []);
+        opts.forEach(function (opt) {
+          var optType = (opt.getAttribute('data-reason-type') || '').toLowerCase();
+          if (!opt.value) {
+            opt.hidden = false;
+            opt.disabled = false;
+            return;
+          }
+          var show = !!reasonType && optType === reasonType;
+          opt.hidden = !show;
+          opt.disabled = !show;
+        });
+        if (!reason.value) return;
+        var selected = reason.options[reason.selectedIndex];
+        if (!selected || selected.disabled) {
+          reason.value = '';
+        }
+      }
+
+      function currentPointsAndType() {
+        var mode = modalPointMode.value;
+        var points = mode === 'manual' ? Number(manualPoints.value || 0) : Number(mode);
+        var reasonType = getReasonTypeFromPoints(points);
+        return { points: points, reasonType: reasonType };
+      }
 
       function openModal(studentId, classId, mode) {
         modalStudentId.value = studentId;
@@ -127,6 +196,9 @@
         reason.value = '';
         customReason.value = '';
         manualPoints.value = 0;
+
+        var inferred = currentPointsAndType();
+        refreshReasonOptionsByType(inferred.reasonType);
 
         if (mode === 'manual') {
           manualWrap.classList.remove('hidden');
@@ -147,6 +219,7 @@
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
       }
+
       function openPhotoPreview(src, name) {
         if (!photoPreviewModal || !photoPreviewImage) return;
         photoPreviewImage.src = src || '';
@@ -191,9 +264,75 @@
         });
       }
 
+      if (manageReasonId && manageNewReason) {
+        manageReasonId.addEventListener('change', function () {
+          var opt = manageReasonId.options[manageReasonId.selectedIndex];
+          var txt = opt ? (opt.getAttribute('data-reason-text') || '') : '';
+          manageNewReason.value = txt;
+        });
+      }
+
+      if (reasonManageForm) {
+        reasonManageForm.addEventListener('click', function (e) {
+          var target = e.target;
+          if (!target || !target.getAttribute) return;
+          var op = target.getAttribute('data-reason-op');
+          if (!op) return;
+          if (manageReasonOperation) manageReasonOperation.value = op;
+        });
+
+        reasonManageForm.addEventListener('submit', function (e) {
+          var op = manageReasonOperation ? (manageReasonOperation.value || '').trim() : '';
+          var selected = manageReasonId ? (manageReasonId.value || '').trim() : '';
+          var edited = manageNewReason ? (manageNewReason.value || '').trim() : '';
+
+          if (!op) {
+            e.preventDefault();
+            alert('Choose Edit or Delete for custom reason.');
+            return;
+          }
+          if (!selected) {
+            e.preventDefault();
+            alert('Select a custom reason first.');
+            return;
+          }
+          if (op === 'edit' && !edited) {
+            e.preventDefault();
+            alert('Type the updated reason text.');
+            return;
+          }
+          if (op === 'delete' && !confirm('Delete this custom reason? Used reasons cannot be deleted.')) {
+            e.preventDefault();
+          }
+        });
+      }
+
+      if (manualPoints) {
+        manualPoints.addEventListener('input', function () {
+          var inferred = currentPointsAndType();
+          refreshReasonOptionsByType(inferred.reasonType);
+        });
+      }
+
+      if (reason) {
+        reason.addEventListener('change', function () {
+          var selected = reason.options[reason.selectedIndex];
+          if (!selected || !selected.value) return;
+          if (selected.disabled) {
+            reason.value = '';
+          }
+        });
+      }
       modalForm.addEventListener('submit', function (e) {
         var chosenReason = (reason.value || '').trim();
         var custom = (customReason.value || '').trim();
+
+        var inferred = currentPointsAndType();
+        if (!Number.isInteger(inferred.points) || inferred.points === 0) {
+          e.preventDefault();
+          alert('Points must be a non-zero integer.');
+          return;
+        }
 
         if (!chosenReason && !custom) {
           e.preventDefault();
@@ -201,11 +340,13 @@
           return;
         }
 
-        if (modalPointMode.value === 'manual') {
-          var points = Number(manualPoints.value);
-          if (!Number.isInteger(points)) {
+        if (chosenReason) {
+          var selected = reason.options[reason.selectedIndex];
+          var selectedType = selected ? (selected.getAttribute('data-reason-type') || '') : '';
+          if (selectedType && selectedType !== inferred.reasonType) {
             e.preventDefault();
-            alert('Manual points must be an integer.');
+            alert('Please choose a ' + inferred.reasonType + ' reason for this points value.');
+            return;
           }
         }
       });
@@ -214,7 +355,3 @@
   <script src="/js/inactivity.js"></script>
 </body>
 </html>
-
-
-
-

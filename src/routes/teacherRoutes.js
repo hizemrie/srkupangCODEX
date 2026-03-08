@@ -431,8 +431,18 @@ router.get("/reward/:classId", (req, res) => {
     )
     .all(classId);
 
-  const reasons = db.prepare("SELECT reason FROM point_reasons ORDER BY reason ASC").all();
-  res.render("teacher-reward", { cls, classes, students, reasons, user: req.session.user, error: null });
+  const reasons = db.prepare("SELECT id, reason, reason_type, is_custom FROM point_reasons ORDER BY reason_type ASC, reason ASC").all();
+  const customReasons = reasons.filter((r) => Number(r.is_custom) === 1);
+  res.render("teacher-reward", {
+    cls,
+    classes,
+    students,
+    reasons,
+    customReasons,
+    user: req.session.user,
+    error: req.query.error || null,
+    success: req.query.success || null
+  });
 });
 
 router.post("/reward/award", (req, res) => {
@@ -447,7 +457,11 @@ router.post("/reward/award", (req, res) => {
   if (!Number.isInteger(points)) {
     return res.status(400).send("Points must be an integer");
   }
+  if (points === 0) {
+    return res.status(400).send("Points cannot be zero");
+  }
 
+  const reasonType = points > 0 ? "positive" : "negative";
   const reasonBase = (req.body.reason || "").trim();
   const customReason = (req.body.custom_reason || "").trim();
   const reason = customReason || reasonBase;
@@ -460,12 +474,30 @@ router.post("/reward/award", (req, res) => {
 
   const now = dayjs().toISOString();
 
+  if (reasonBase && !customReason) {
+    const selectedReason = db.prepare("SELECT reason_type FROM point_reasons WHERE reason = ?").get(reasonBase);
+    if (!selectedReason) {
+      return res.status(400).send("Selected reason not found");
+    }
+    const selectedType = String(selectedReason.reason_type || "positive").toLowerCase();
+    if (selectedType !== reasonType) {
+      return res.status(400).send("Selected reason type does not match points sign");
+    }
+  }
+
   if (customReason) {
-    db.prepare(
-      `INSERT INTO point_reasons (reason, created_by, is_custom, created_at)
-       VALUES (?, ?, 1, ?)
-       ON CONFLICT(reason) DO NOTHING`
-    ).run(customReason, req.session.user.id, now);
+    const existingReason = db.prepare("SELECT id, reason_type FROM point_reasons WHERE reason = ?").get(customReason);
+    if (existingReason) {
+      const existingType = String(existingReason.reason_type || "positive").toLowerCase();
+      if (existingType !== reasonType) {
+        return res.status(400).send("Custom reason already exists with opposite type. Use a different reason text.");
+      }
+    } else {
+      db.prepare(
+        `INSERT INTO point_reasons (reason, reason_type, created_by, is_custom, created_at)
+         VALUES (?, ?, ?, 1, ?)`
+      ).run(customReason, reasonType, req.session.user.id, now);
+    }
   }
 
   db.prepare(
@@ -477,6 +509,57 @@ router.post("/reward/award", (req, res) => {
   res.redirect(`/teacher/reward/${classId}`);
 });
 
+router.post("/reasons/manage", (req, res) => {
+  const classId = Number(req.body.class_id || 0);
+  const reasonId = Number(req.body.reason_id || 0);
+  const operation = String(req.body.operation || "").trim().toLowerCase();
+  const newReason = String(req.body.new_reason || "").trim();
+
+  const redirectBase = classId ? `/teacher/reward/${classId}` : "/teacher/reward";
+  if (!reasonId) {
+    return res.redirect(`${redirectBase}?error=${encodeURIComponent("Select a custom reason first")}`);
+  }
+  if (!["edit", "delete"].includes(operation)) {
+    return res.redirect(`${redirectBase}?error=${encodeURIComponent("Invalid reason action")}`);
+  }
+
+  const target = db.prepare("SELECT id, reason, reason_type, is_custom FROM point_reasons WHERE id = ?").get(reasonId);
+  if (!target || Number(target.is_custom) !== 1) {
+    return res.redirect(`${redirectBase}?error=${encodeURIComponent("Only custom reasons can be managed")}`);
+  }
+
+  if (operation === "edit") {
+    if (!newReason) {
+      return res.redirect(`${redirectBase}?error=${encodeURIComponent("New reason text is required for edit")}`);
+    }
+    if (newReason === target.reason) {
+      return res.redirect(`${redirectBase}?success=${encodeURIComponent("No changes applied")}`);
+    }
+
+    const existing = db.prepare("SELECT id FROM point_reasons WHERE reason = ? AND id <> ?").get(newReason, reasonId);
+    if (existing) {
+      return res.redirect(`${redirectBase}?error=${encodeURIComponent("Reason already exists")}`);
+    }
+
+    const tx = db.transaction(() => {
+      db.prepare("UPDATE point_reasons SET reason = ? WHERE id = ? AND is_custom = 1").run(newReason, reasonId);
+      db.prepare("UPDATE point_logs SET reason = ? WHERE reason = ?").run(newReason, target.reason);
+    });
+    tx();
+
+    return res.redirect(`${redirectBase}?success=${encodeURIComponent("Custom reason updated")}`);
+  }
+
+  const usage = db.prepare("SELECT COUNT(*) AS total FROM point_logs WHERE reason = ?").get(target.reason);
+  if (Number((usage || {}).total || 0) > 0) {
+    return res.redirect(
+      `${redirectBase}?error=${encodeURIComponent("Cannot delete: this reason is already used in point history. Edit it instead.")}`
+    );
+  }
+
+  db.prepare("DELETE FROM point_reasons WHERE id = ? AND is_custom = 1").run(reasonId);
+  return res.redirect(`${redirectBase}?success=${encodeURIComponent("Custom reason deleted")}`);
+});
 router.get("/students", (req, res) => {
   const classes = db.prepare("SELECT id, name FROM classes ORDER BY name").all();
   res.render("teacher-classes", { classes, mode: "students" });

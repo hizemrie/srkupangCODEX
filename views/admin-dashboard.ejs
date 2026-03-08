@@ -201,7 +201,87 @@
       <% } %>
     </section>
 
-    <section class="card">
+            <section class="card">
+      <h2>Points Management</h2>
+      <p class="muted">Reset points using checkbox filters: target scope (all students, by class, selected students) and time filter (all time, specific date, date range).</p>
+      <form method="post" action="/admin/points/reset" class="stack" onsubmit="return confirm('Reset selected points now? This cannot be undone.');">
+        <div class="inline-filters">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="scope_all_students" id="scopeAllStudents" value="1" />
+            All students
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="scope_whole_class" id="scopeWholeClass" value="1" checked />
+            By class
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="scope_selected_students" id="scopeSelectedStudents" value="1" />
+            Selected students
+          </label>
+        </div>
+
+        <div id="classFilterWrap" class="inline-filters">
+          <label>Class
+            <select name="class_id" id="pointsResetClass" onchange="window.location='/admin/dashboard?class_id=' + encodeURIComponent(this.value);">
+              <% classes.forEach(c => { %>
+                <option value="<%= c.id %>" <%= Number(selectedClassId) === Number(c.id) ? 'selected' : '' %>><%= c.name %></option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+
+        <div id="selectedStudentsWrap" style="display:none; border:1px solid rgba(255,255,255,0.14); border-radius:10px; padding:10px; max-height:200px; overflow:auto;">
+          <% if (!studentsInClass.length) { %>
+            <div class="muted">No students in selected class.</div>
+          <% } else { %>
+            <div class="muted" style="margin-bottom:8px;">Tick one or more students:</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
+              <% studentsInClass.forEach(s => { %>
+                <label style="display:flex;align-items:center;gap:8px;">
+                  <input type="checkbox" name="selected_students" value="<%= s.id %>" />
+                  <span><%= s.nickname %> - <%= s.full_name %></span>
+                </label>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="inline-filters">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="filter_all_time" id="filterAllTime" value="1" checked />
+            All time
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="filter_specific_date" id="filterSpecificDate" value="1" />
+            Specific date
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="filter_date_range" id="filterDateRange" value="1" />
+            Date range
+          </label>
+        </div>
+
+        <div id="selectedDateWrap" class="inline-filters" style="display:none;">
+          <label>Date
+            <input type="date" name="selected_date" value="<%= new Date().toISOString().slice(0,10) %>" />
+          </label>
+        </div>
+
+        <div id="dateRangeWrap" class="inline-filters" style="display:none;">
+          <label>From
+            <input type="date" name="range_start" />
+          </label>
+          <label>To
+            <input type="date" name="range_end" />
+          </label>
+        </div>
+
+        <div class="inline-filters">
+          <button class="btn danger" type="submit">Reset Points</button>
+        </div>
+      </form>
+    </section>
+<section class="card">
       <h2>Active Calendar Events</h2>
       <table>
         <thead>
@@ -511,6 +591,48 @@
         });
       }
 
+      var scopeAllStudents = document.getElementById('scopeAllStudents');
+      var scopeWholeClass = document.getElementById('scopeWholeClass');
+      var scopeSelectedStudents = document.getElementById('scopeSelectedStudents');
+      var classFilterWrap = document.getElementById('classFilterWrap');
+      var selectedStudentsWrap = document.getElementById('selectedStudentsWrap');
+      var filterAllTime = document.getElementById('filterAllTime');
+      var filterSpecificDate = document.getElementById('filterSpecificDate');
+      var filterDateRange = document.getElementById('filterDateRange');
+      var selectedDateWrap = document.getElementById('selectedDateWrap');
+      var dateRangeWrap = document.getElementById('dateRangeWrap');
+
+      function syncPointsResetUi() {
+        var allStudentsOn = !!(scopeAllStudents && scopeAllStudents.checked);
+
+        if (scopeWholeClass) {
+          scopeWholeClass.disabled = allStudentsOn;
+          if (allStudentsOn) scopeWholeClass.checked = false;
+        }
+        if (scopeSelectedStudents) {
+          scopeSelectedStudents.disabled = allStudentsOn;
+          if (allStudentsOn) scopeSelectedStudents.checked = false;
+        }
+
+        if (classFilterWrap) {
+          var showClassControls = !allStudentsOn && ((scopeWholeClass && scopeWholeClass.checked) || (scopeSelectedStudents && scopeSelectedStudents.checked));
+          classFilterWrap.style.display = showClassControls ? 'flex' : 'none';
+        }
+        if (selectedStudentsWrap && scopeSelectedStudents) {
+          selectedStudentsWrap.style.display = (!allStudentsOn && scopeSelectedStudents.checked) ? 'block' : 'none';
+        }
+        if (selectedDateWrap && filterSpecificDate) {
+          selectedDateWrap.style.display = filterSpecificDate.checked ? 'flex' : 'none';
+        }
+        if (dateRangeWrap && filterDateRange) {
+          dateRangeWrap.style.display = filterDateRange.checked ? 'flex' : 'none';
+        }
+      }
+
+      [scopeAllStudents, scopeWholeClass, scopeSelectedStudents, filterAllTime, filterSpecificDate, filterDateRange].forEach(function (el) {
+        if (el) el.addEventListener('change', syncPointsResetUi);
+      });
+      syncPointsResetUi();
       if (staffCsvInput && staffPreviewWrap && staffPreviewBody) {
         staffCsvInput.addEventListener('change', function () {
           var file = staffCsvInput.files && staffCsvInput.files[0];

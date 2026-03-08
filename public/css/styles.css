@@ -2342,3 +2342,42 @@ label.calendar-label-option input[type="checkbox"] {
   flex: 0 0 16px;
   vertical-align: middle;
 }
+/* Reward modal theme alignment + custom reason manager */
+.reward-modal {
+  background: rgba(7, 12, 34, 0.72);
+}
+
+.reward-modal-card {
+  width: min(520px, 100%);
+  background: linear-gradient(180deg, rgba(20, 30, 74, 0.97), rgba(11, 18, 50, 0.97));
+  border: 1px solid rgba(128, 150, 255, 0.35);
+  color: #eaf0ff;
+  box-shadow: 0 24px 48px rgba(2, 8, 30, 0.5);
+}
+
+.reward-modal-card h3,
+.reward-modal-card h4,
+.reward-modal-card label {
+  color: #dbe7ff;
+}
+
+.reward-modal-card input,
+.reward-modal-card select {
+  background: rgba(10, 17, 46, 0.96);
+  color: #eef3ff;
+  border: 1px solid rgba(130, 155, 245, 0.35);
+}
+
+.reward-modal-card input::placeholder {
+  color: #9cb0e5;
+}
+
+.reason-manage-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(132, 153, 245, 0.28);
+}
+
+.reason-manage-block h4 {
+  margin: 0 0 8px;
+}
